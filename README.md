@@ -28,7 +28,22 @@ Bitweather is Daniel's 128bit-family take on weather: current conditions, hourly
 2. Which weather data provider? (Open-Meteo is free with no API key — strong default; Environment Canada for Canadian accuracy.)
 3. Any signature features — pixel radar, quest-linked weather, railroad-specific conditions (Daniel's a railroader — wind/temp at terminals?)?
 
-## The app (`app/`)
+## Android app (`android/`) — the real app
+
+Native Kotlin app (Jetpack Compose) with **real home-screen widgets**. Install the APK from **[Releases](https://github.com/Hootywhooo86/bitweather/releases/latest)**. Every push that changes `android/` builds a new signed APK there.
+
+- **Home-screen widgets** (long-press home screen → Widgets → Bitweather), all resizable. Each one redraws pixel-perfect for its size:
+  - **Now:** temperature, conditions and alerts. Make it bigger to add an hourly strip, then the 10-day forecast.
+  - **Hourly:** a forecast strip. Make it taller to add a temperature chart.
+  - **10-day:** pills when it's short, range-bar rows when it's tall.
+  - **Details:** a grid of wind, humidity, UV, air quality, sun, pressure, precipitation and visibility tiles that fills whatever size you give it.
+- **Current location:** the app opens on where you are. Location and weather refresh every 30 minutes in the background (WorkManager). Choose "Allow all the time" so widgets follow you while the app is closed.
+- **In the app:** every card from the screenshots in 4 sizes (✎ to resize, reorder, remove or add), unlimited saved places with search (swipe to switch), a day detail view, alerts, an animated radar, units, and custom alert thresholds.
+- **Notifications:** official alerts (Environment Canada / US NWS) plus custom alerts (each sent once), a quiet conditions notification every 30 minutes, and **app updates** (it checks GitHub Releases and taps through to the new APK).
+- **Build locally:** `cd android && ./gradlew assembleRelease` (needs the Android SDK). `./gradlew testDebugUnitTest` renders widget and screen previews into `android/app/build/previews/`.
+- **Signing:** `android/keystore/bitweather.jks` is a fixed key, committed so CI builds always update the installed app in place. Its password is in `app/build.gradle.kts`. Fine for a sideloaded personal app. Move it to GitHub secrets before any Play Store release.
+
+## Web app (`app/`)
 
 Live at https://hootywhooo86.github.io/bitweather/app/ — an installable web app (PWA) in the landing page's pixel style.
 
@@ -64,6 +79,7 @@ Real home-screen widgets need the native Android/iOS build. These web widgets ar
 - [ ] Product direction locked (Daniel)
 - [x] Weather data provider chosen (Open-Meteo + ECCC/NWS alerts)
 - [x] Web app with widgets + saved locations (`app/`)
-- [ ] Native home-screen widgets (Android/iOS)
+- [x] Native Android app + home-screen widgets (`android/`, APK on Releases)
+- [ ] iOS
 - [ ] Widget build (per platform call)
 - [ ] Full app behind the widget

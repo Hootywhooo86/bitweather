@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Bitweather</string>
+    <string name="w_now">Bitweather · Now</string>
+    <string name="w_hourly">Bitweather · Hourly</string>
+    <string name="w_daily">Bitweather · 10-day</string>
+    <string name="w_details">Bitweather · Details</string>
+    <string name="w_now_desc">Current conditions where you are. Resize for hourly and daily.</string>
+    <string name="w_hourly_desc">Hourly forecast strip. Make it taller for a temperature chart.</string>
+    <string name="w_daily_desc">10-day forecast with temperature ranges.</string>
+    <string name="w_details_desc">Wind, humidity, UV, air quality, pressure and more.</string>
+</resources>
