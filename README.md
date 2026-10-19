@@ -34,7 +34,9 @@ Live at https://hootywhooo86.github.io/bitweather/app/ — an installable web ap
 
 - **Widgets in 4 sizes** (thin, small, wide, large). Tap ✎ to resize, reorder, remove, or add widgets. The layout is saved on the device.
 - **Widgets:** alerts, weather brief, weather insight, hourly forecast with a temperature chart, 10-day forecast, precipitation, wind compass and gusts, sunrise and sunset, UV index, air quality (AQHI or US AQI with pollutant breakdown), visibility, humidity and dew point, pressure with its trend, feels like, moon phase, and an animated radar.
-- **Locations:** GPS "use my location" (refreshes on open), place search, and unlimited saved places. Reorder or remove them in ☰, and swipe the top card to switch places.
+- **Current location first:** the app opens on where you are, and your location and weather refresh every 30 minutes.
+- **Notifications:** official alerts plus your custom alerts, each sent once, and an optional conditions update every 30 minutes. You also get a notice when the app updates. Turn them on in ⚙ → Notifications. Background checks need the app installed on Android.
+- **Locations:** GPS "use my location", place search, and unlimited saved places. Reorder or remove them in ☰, and swipe the top card to switch places.
 - **Settings:** °C/°F, km/h, mph, m/s, knots, mm/in, hPa/kPa/inHg, km/mi, 24h/12h, and custom alerts (e.g. a warning when it drops below -20°).
 - **Offline:** each place's last forecast is cached, and the app shell works offline.
 - **Data (all free, no API keys):** Open-Meteo for the forecast and air quality, Environment Canada and US NWS for official alerts, Photon/OSM and Open-Meteo for place search, and RainViewer for radar.

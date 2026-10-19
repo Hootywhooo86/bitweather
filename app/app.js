@@ -46,6 +46,7 @@
       aqScale: s.aqScale || 'aqhi',
       thresholds: { cold: -20, hot: 30, gust: 70, snow: 10, ...(s.thresholds || {}) },
       gpsAuto: s.gpsAuto !== false,
+      notify: { alerts: true, updates: true, app: true, ...(s.notify || {}) },
       firstRun: !s.locations,
       layout,
     };
@@ -55,53 +56,25 @@
   const save = () => {
     const { firstRun, ...rest } = state;
     try { localStorage.setItem(STORE, JSON.stringify(rest)); } catch (e) { /* ignore */ }
+    syncConfig();
   };
   const activeLoc = () => state.locations.find(l => l.id === state.activeId) || state.locations[0];
   let editing = false;
 
-  // ---------------------------------------------------------------- units & format
+  // ---------------------------------------------------------------- units, format & weather codes (shared.js)
+  const Core = window.BWCore;
   const U = state.units;
-  const fT = c => (c == null ? '--' : Math.round(U.temp === 'F' ? c * 9 / 5 + 32 : c)) + '°';
-  const WIND = { kmh: [1, 'km/h'], mph: [0.621371, 'mph'], ms: [1 / 3.6, 'm/s'], kn: [0.539957, 'kn'] };
-  const fWnum = k => Math.round(k * WIND[U.wind][0]);
-  const fW = k => fWnum(k) + ' ' + WIND[U.wind][1];
-  const fP = mm => (U.precip === 'in' ? (mm / 25.4).toFixed(2) : (mm < 10 ? mm.toFixed(1) : Math.round(mm)));
-  const pU = () => (U.precip === 'in' ? 'in' : 'mm');
-  const fPr = h => (U.pressure === 'inHg' ? (h * 0.02953).toFixed(2) : U.pressure === 'kPa' ? (h / 10).toFixed(1) : Math.round(h).toLocaleString());
-  const fD = m => (U.dist === 'mi' ? [+(m / 1609.34).toFixed(m < 16093 ? 1 : 0), 'mi'] : [+(m / 1000).toFixed(m < 10000 ? 1 : 0), 'km']);
-  const fClock = s => {
-    const hh = +s.slice(11, 13), mm = s.slice(14, 16);
-    if (U.clock === '24') return s.slice(11, 16);
-    return ((hh % 12) || 12) + (mm === '00' ? '' : ':' + mm) + (hh < 12 ? 'a' : 'p');
-  };
-  const fHour = s => (U.clock === '24' ? s.slice(11, 16) : fClock(s));
-  const naive = s => Date.parse(s.length === 10 ? s + 'T00:00Z' : s + 'Z');
-  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const dowOf = d => DOW[new Date(d + 'T12:00Z').getUTCDay()];
+  const { fT, fWnum, fW, fP, pU, fPr, fD, fClock, fHour, windUnit } = Core.makeFmt(U);
+  const { WMO, condName, naive, dowOf, getJSON, forecastURL, airURL, officialAlerts } = Core;
   const compass = deg => ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'][Math.round(((deg % 360) / 22.5)) % 16];
   const compass8 = deg => ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(((deg % 360) / 45)) % 8];
-
-  // ---------------------------------------------------------------- weather codes
-  const WMO = {
-    0: ['Clear', 'clear'], 1: ['Mainly clear', 'mostly'], 2: ['Partly cloudy', 'partly'], 3: ['Overcast', 'cloudy'],
-    45: ['Fog', 'fog'], 48: ['Freezing fog', 'fog'],
-    51: ['Light drizzle', 'drizzle'], 53: ['Drizzle', 'drizzle'], 55: ['Heavy drizzle', 'drizzle'],
-    56: ['Freezing drizzle', 'freezing'], 57: ['Freezing drizzle', 'freezing'],
-    61: ['Light rain', 'rain'], 63: ['Rain', 'rain'], 65: ['Heavy rain', 'rain'],
-    66: ['Freezing rain', 'freezing'], 67: ['Freezing rain', 'freezing'],
-    71: ['Light snow', 'snow'], 73: ['Snow', 'snow'], 75: ['Heavy snow', 'snow'], 77: ['Snow grains', 'snow'],
-    80: ['Light showers', 'showers'], 81: ['Showers', 'showers'], 82: ['Heavy showers', 'rain'],
-    85: ['Snow showers', 'snow'], 86: ['Heavy snow showers', 'snow'],
-    95: ['Thunderstorm', 'thunder'], 96: ['Thunderstorm, hail', 'thunder'], 99: ['Thunderstorm, hail', 'thunder'],
-  };
-  const condName = c => (WMO[c] || ['Unknown'])[0];
   const ico = (c, day = 1) => icon((WMO[c] || [0, 'clear'])[1], !!day);
   const isSnow = c => (c >= 71 && c <= 77) || c === 85 || c === 86;
-  const isWet = c => c >= 51;
 
   // ---------------------------------------------------------------- data
   const CACHE_KEY = id => 'bw.cache.' + id;
-  const FRESH_MS = 10 * 60 * 1000;
+  const UPDATE_MS = 30 * 60 * 1000; // weather + current location refresh every 30 min
+  const FRESH_MS = UPDATE_MS;
   const mem = {};
   function readCache(id) {
     if (mem[id]) return mem[id];
@@ -111,61 +84,6 @@
   function writeCache(id, data) {
     mem[id] = data;
     try { localStorage.setItem(CACHE_KEY(id), JSON.stringify(data)); } catch (e) { /* quota */ }
-  }
-  async function getJSON(url, ms = 15000) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), ms);
-    try {
-      const r = await fetch(url, { signal: ctl.signal });
-      if (!r.ok) throw new Error(r.status + ' ' + url);
-      return await r.json();
-    } finally { clearTimeout(t); }
-  }
-
-  function forecastURL(l) {
-    const p = new URLSearchParams({
-      latitude: l.lat, longitude: l.lon, timezone: 'auto', forecast_days: 10, past_days: 1,
-      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,visibility,dew_point_2m,uv_index',
-      hourly: 'temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation_probability,precipitation,snowfall,weather_code,pressure_msl,visibility,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,is_day',
-      daily: 'weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,daylight_duration,uv_index_max,precipitation_sum,rain_sum,snowfall_sum,precipitation_hours,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant',
-    });
-    return 'https://api.open-meteo.com/v1/forecast?' + p;
-  }
-  function airURL(l) {
-    const p = new URLSearchParams({
-      latitude: l.lat, longitude: l.lon, timezone: 'auto', past_days: 1, forecast_days: 2,
-      current: 'us_aqi,european_aqi,pm2_5,pm10,ozone,nitrogen_dioxide,sulphur_dioxide,carbon_monoxide',
-      hourly: 'pm2_5,ozone,nitrogen_dioxide,us_aqi',
-    });
-    return 'https://air-quality-api.open-meteo.com/v1/air-quality?' + p;
-  }
-  async function officialAlerts(l) {
-    const now = Date.now();
-    if (l.cc === 'CA') {
-      const d = 0.02;
-      const j = await getJSON(`https://api.weather.gc.ca/collections/weather-alerts/items?f=json&lang=en&limit=50&bbox=${[l.lon - d, l.lat - d, l.lon + d, l.lat + d].map(v => v.toFixed(4)).join(',')}`, 20000);
-      const seen = new Set();
-      return (j.features || []).map(f => f.properties).filter(p => {
-        const exp = Date.parse(p.expiration_datetime || p.event_end_datetime || 0);
-        const k = p.alert_name_en + '|' + (p.alert_text_en || '').slice(0, 80);
-        if ((exp && exp < now) || seen.has(k) || /cancel/i.test(p.status_en || '')) return false;
-        seen.add(k); return true;
-      }).map(p => ({
-        type: p.alert_type || 'statement',
-        title: (p.alert_short_name_en || p.alert_name_en || 'Weather alert').replace(/^\w/, c => c.toUpperCase()),
-        name: p.alert_name_en, text: p.alert_text_en || '',
-        until: p.event_end_datetime || p.expiration_datetime, src: 'Environment and Climate Change Canada',
-      }));
-    }
-    if (l.cc === 'US') {
-      const j = await getJSON(`https://api.weather.gov/alerts/active?point=${l.lat.toFixed(4)},${l.lon.toFixed(4)}`);
-      return (j.features || []).map(f => f.properties).map(p => ({
-        type: /warning/i.test(p.event) ? 'warning' : /watch/i.test(p.event) ? 'watch' : 'advisory',
-        title: p.event, name: p.headline, text: [p.description, p.instruction].filter(Boolean).join('\n\n'),
-        until: p.ends || p.expires, src: 'US National Weather Service',
-      }));
-    }
-    return [];
   }
 
   const inflight = {};
@@ -253,20 +171,7 @@
   const hoursAhead = (c, n) => { const out = []; for (let i = c.i0; i < Math.min(c.H.time.length, c.i0 + n); i++) out.push(i); return out; };
   const dayHours = (c, d) => c.H.time.map((t, i) => [t, i]).filter(([t]) => t.startsWith(c.D.time[d])).map(([, i]) => i);
 
-  function customAlerts(c) {
-    const T = state.thresholds, out = [];
-    const hrs = hoursAhead(c, 48);
-    const minI = hrs.reduce((a, i) => (c.H.temperature_2m[i] < c.H.temperature_2m[a] ? i : a), hrs[0]);
-    const maxI = hrs.reduce((a, i) => (c.H.temperature_2m[i] > c.H.temperature_2m[a] ? i : a), hrs[0]);
-    const gI = hrs.reduce((a, i) => (c.H.wind_gusts_10m[i] > c.H.wind_gusts_10m[a] ? i : a), hrs[0]);
-    const when = i => dowOf(c.H.time[i].slice(0, 10)) + ' ' + fHour(c.H.time[i]);
-    if (T.cold != null && c.H.temperature_2m[minI] <= T.cold) out.push({ type: 'custom', title: `Below ${fT(T.cold)}`, name: `Drops to ${fT(c.H.temperature_2m[minI])} ${when(minI)}`, text: 'Your cold threshold alert.' });
-    if (T.hot != null && c.H.temperature_2m[maxI] >= T.hot) out.push({ type: 'custom', title: `Above ${fT(T.hot)}`, name: `Reaches ${fT(c.H.temperature_2m[maxI])} ${when(maxI)}`, text: 'Your heat threshold alert.' });
-    if (T.gust != null && c.H.wind_gusts_10m[gI] >= T.gust) out.push({ type: 'custom', title: `Gusts over ${fW(T.gust)}`, name: `Gusts to ${fW(c.H.wind_gusts_10m[gI])} ${when(gI)}`, text: 'Your wind threshold alert.' });
-    const snow = hrs.reduce((s, i) => s + (c.H.snowfall[i] || 0), 0);
-    if (T.snow != null && snow >= T.snow) out.push({ type: 'custom', title: `Snow ${Math.round(snow)} cm`, name: `About ${Math.round(snow)} cm of snow in the next 48 h`, text: 'Your snowfall threshold alert.' });
-    return out;
-  }
+  const customAlerts = c => Core.customAlerts(c.w, state.thresholds, Core.makeFmt(U));
   const allAlerts = c => [...c.alerts, ...customAlerts(c)];
 
   function tempWord(t) { return t <= -20 ? 'bitterly cold' : t <= -5 ? 'very cold' : t <= 5 ? 'cold' : t <= 14 ? 'cool' : t <= 22 ? 'mild' : t <= 28 ? 'warm' : 'hot'; }
@@ -478,7 +383,7 @@
   };
   R.wind = (c, size) => {
     const k = c.cur.wind_speed_10m, dir = c.cur.wind_direction_10m;
-    const g = `<div style="flex:1;min-height:0">${compassSvg(dir, fWnum(k), WIND[U.wind][1])}</div><div class="lbl" style="text-align:center">From ${compass(dir)}</div>`;
+    const g = `<div style="flex:1;min-height:0">${compassSvg(dir, fWnum(k), windUnit())}</div><div class="lbl" style="text-align:center">From ${compass(dir)}</div>`;
     if (size === 'S') return head('wind') + `<div class="wb">${g}</div>`;
     const d = c.d0;
     return head('wind') + `<div class="wb"><div class="row" style="flex:1;min-height:0"><div style="width:50%;height:100%;display:flex;flex-direction:column">${g}</div><div class="grow kv" style="grid-template-columns:1fr">
@@ -630,7 +535,7 @@
       <div class="gridwrap"><div class="grid" id="grid"></div><div id="tray"></div></div>`;
     $('#bLoc').onclick = openLocations;
     $('#bSet').onclick = openSettings;
-    $('#bRef').onclick = () => refresh(true);
+    $('#bRef').onclick = () => tick(true);
     $('#bEdit').onclick = () => { editing = !editing; renderWidgets(); };
     bindSwipe($('#hero'));
   }
@@ -639,7 +544,7 @@
     const l = activeLoc();
     $('#locName').innerHTML = (l.gps ? '&#9678; ' : '') + esc(l.name).toUpperCase();
     const data = c && c.data;
-    $('#upd').textContent = err ? err : data ? `${l.admin ? l.admin + ' · ' : ''}Updated ${new Date(data.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: U.clock === '12' })}${data.stale ? ' (offline)' : ''}` : 'Loading…';
+    $('#upd').textContent = err ? err : data ? `${l.admin ? l.admin + ' · ' : ''}Updated ${new Date(data.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: U.clock === '12' })}${data.stale ? ' (offline)' : ' · every 30 min'}` : 'Loading…';
     const hero = $('#hero');
     hero.style.background = skyFor(c);
     const dots = state.locations.map(x => `<i class="${x.gps ? 'gps ' : ''}${x.id === l.id ? 'on' : ''}"></i>`).join('');
@@ -834,17 +739,23 @@
       <div class="sec">CUSTOM ALERTS (NEXT 48 H, METRIC)</div>
       ${th('cold', 'Temp drops to', '°C')}${th('hot', 'Temp reaches', '°C')}${th('gust', 'Wind gusts over', 'km/h')}${th('snow', 'Snowfall over', 'cm')}
       <p class="note">Leave a box empty to turn that alert off.</p>
-      <div class="sec">LOCATION</div>
-      <div class="opt"><button class="pxbtn${state.gpsAuto ? ' on' : ''}" data-gps>&#9678; Update my location on open: ${state.gpsAuto ? 'ON' : 'OFF'}</button></div>
+      <div class="sec">CURRENT LOCATION</div>
+      <div class="opt"><button class="pxbtn${state.gpsAuto ? ' on' : ''}" data-gps>&#9678; Follow my location: ${state.gpsAuto ? 'ON' : 'OFF'}</button></div>
+      <p class="note">When on, the app opens on where you are, and your location and weather refresh every 30 minutes.</p>
+      <div class="sec">NOTIFICATIONS</div>
+      <div id="notifBox">${notifHtml()}</div>
       <div class="sec">ABOUT</div>
       <p class="note">Forecast &amp; air quality: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a>. Alerts: Environment and Climate Change Canada, US National Weather Service. Places: Photon / OpenStreetMap. Radar: RainViewer. Location is only used on this device to fetch your forecast.</p>
       <div class="opt" style="margin-top:12px"><button class="pxbtn warn" data-wipe>CLEAR CACHED WEATHER</button></div>`, body => {
+      showBgStatus();
       body.addEventListener('click', e => {
+        const n = e.target.closest('[data-nperm],[data-ntog],[data-ntest]');
+        if (n) { notifClick(n, body); return; }
         const t = e.target.closest('[data-u],[data-aq],[data-gps],[data-wipe]');
         if (!t) return;
         if (t.dataset.u) { U[t.dataset.u] = t.dataset.v; t.parentElement.querySelectorAll('.pxbtn').forEach(b => b.classList.toggle('on', b === t)); }
         if (t.dataset.aq) { state.aqScale = t.dataset.aq; t.parentElement.querySelectorAll('.pxbtn').forEach(b => b.classList.toggle('on', b === t)); }
-        if (t.dataset.gps != null) { state.gpsAuto = !state.gpsAuto; t.classList.toggle('on', state.gpsAuto); t.innerHTML = `&#9678; Update my location on open: ${state.gpsAuto ? 'ON' : 'OFF'}`; }
+        if (t.dataset.gps != null) { state.gpsAuto = !state.gpsAuto; t.classList.toggle('on', state.gpsAuto); t.innerHTML = `&#9678; Follow my location: ${state.gpsAuto ? 'ON' : 'OFF'}`; if (state.gpsAuto) { save(); tick(true); } }
         if (t.dataset.wipe != null) { state.locations.forEach(l => { delete mem[l.id]; try { localStorage.removeItem(CACHE_KEY(l.id)); } catch (err) { /* */ } }); toast('Cache cleared'); refresh(true); }
         save(); rerender();
       });
@@ -905,26 +816,119 @@
       if (current) toast('Offline — showing saved forecast');
     } finally { $('#bRef').classList.remove('loading'); }
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
-  setInterval(() => { if (!document.hidden) refresh(); }, 5 * 60 * 1000);
+  // ---------------------------------------------------------------- current location + 30-minute updates
+  const notifyLoc = () => state.locations.find(l => l.gps) || state.locations[0];
+  async function locate(selectIt) {
+    if (!state.gpsAuto && !state.firstRun) return;
+    try {
+      await useMyLocation(selectIt);
+      if (state.firstRun) { state.locations = state.locations.filter(l => l.id !== DEFAULT_LOC.id); state.firstRun = false; save(); }
+    } catch (e) {
+      if (state.firstRun) { state.firstRun = false; toast('Location is off — tap ☰ to use your location or add places'); }
+    }
+  }
+  let ticking = null;
+  function tick(force) {
+    if (ticking) return ticking;
+    ticking = (async () => {
+      await locate(state.activeId === 'gps');
+      await refresh(force);
+      const nl = notifyLoc();
+      if (nl.id !== activeLoc().id) await fetchAll(nl, force).catch(() => {});
+      await notifyCheck();
+    })().finally(() => { ticking = null; });
+    return ticking;
+  }
+  setInterval(() => tick(true), UPDATE_MS);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    const c = readCache(activeLoc().id);
+    if (!c || Date.now() - c.t >= UPDATE_MS) tick();
+  });
+
+  // ---------------------------------------------------------------- notifications
+  let swReg = null;
+  const canNotify = () => 'Notification' in window && 'serviceWorker' in navigator;
+  async function syncConfig() {
+    const old = (await Core.readConfig()) || {};
+    const cfg = { ...old, loc: notifyLoc(), units: U, thresholds: state.thresholds, notify: state.notify };
+    await Core.writeConfig(cfg);
+    return cfg;
+  }
+  async function notifyCheck() {
+    if (!canNotify() || Notification.permission !== 'granted' || !swReg) return;
+    const l = notifyLoc(), data = readCache(l.id);
+    if (!data || data.stale) return;
+    const cfg = await syncConfig();
+    if (cfg.lastData === data.t) return; // this forecast was already announced
+    cfg.seen = await Core.notifyFrom(swReg, cfg, l, data.w, data.alerts);
+    cfg.lastData = data.t;
+    await Core.writeConfig(cfg);
+  }
+  async function enableBackground() {
+    if (!swReg || !swReg.periodicSync) return false;
+    try {
+      const st = await navigator.permissions.query({ name: 'periodic-background-sync' });
+      if (st.state !== 'granted') return false;
+      await swReg.periodicSync.register('bw-refresh', { minInterval: UPDATE_MS });
+      return true;
+    } catch (e) { return false; }
+  }
+  function notifHtml() {
+    if (!canNotify()) return '<p class="note">This browser can\'t show notifications. On iPhone, add Bitweather to your Home Screen first (Share → Add to Home Screen), then open it from there.</p>';
+    const p = Notification.permission;
+    const tog = (k, label) => `<button class="pxbtn${state.notify[k] ? ' on' : ''}" data-ntog="${k}">${label}: ${state.notify[k] ? 'ON' : 'OFF'}</button>`;
+    return `${p === 'granted' ? '<p class="lbl" style="color:var(--green)">&#10003; Notifications are on</p>'
+      : p === 'denied' ? '<p class="note" style="color:var(--red)">Notifications are blocked. Allow them for this site in your browser or phone settings, then come back.</p>'
+      : '<div class="opt"><button class="pxbtn primary" data-nperm>&#128276; TURN ON NOTIFICATIONS</button></div>'}
+      <div class="opt" style="margin-top:10px;flex-direction:column;align-items:flex-start">${tog('alerts', '! Weather alerts')}${tog('updates', '&#9925; Conditions every 30 min')}${tog('app', '&#9733; App updates')}</div>
+      ${p === 'granted' ? '<div class="opt" style="margin-top:10px"><button class="pxbtn" data-ntest>SEND TEST</button></div>' : ''}
+      <p class="note">Alerts cover official warnings (Environment Canada / US NWS) plus your custom alerts above, for your current location. Each alert notifies once. With the app installed on Android (Add to Home Screen), Bitweather also checks in the background about every 30 minutes; otherwise it checks while the app is open.</p>
+      <p class="note" id="bgStatus"></p>`;
+  }
+  async function notifClick(t, body) {
+    if (t.dataset.nperm != null) {
+      const p = await Notification.requestPermission();
+      if (p === 'granted') {
+        await syncConfig();
+        const bg = await enableBackground();
+        toast(bg ? 'Notifications on — background checks every 30 min' : 'Notifications on');
+        const cfg = await syncConfig(); delete cfg.lastData; await Core.writeConfig(cfg);
+        notifyCheck();
+      }
+    }
+    if (t.dataset.ntog) { state.notify[t.dataset.ntog] = !state.notify[t.dataset.ntog]; save(); }
+    if (t.dataset.ntest != null && swReg) {
+      const l = notifyLoc(), d = readCache(l.id);
+      await swReg.showNotification(`Bitweather — ${l.name}`, { body: d ? Core.nowSummary(d.w, Core.makeFmt(U)) : 'Notifications are working.', tag: 'bw-test', icon: 'icon-192.png', badge: 'badge-96.png' }).catch(() => toast('Could not show a notification'));
+    }
+    $('#notifBox', body).innerHTML = notifHtml();
+    showBgStatus();
+  }
+  async function showBgStatus() {
+    const el = $('#bgStatus'); if (!el) return;
+    let on = false;
+    try { on = swReg && swReg.periodicSync && (await swReg.periodicSync.getTags()).includes('bw-refresh'); } catch (e) { /* */ }
+    el.textContent = on ? 'Background checks: ON' : 'Background checks: only while the app is open (install the app to enable)';
+  }
 
   // ---------------------------------------------------------------- boot
   renderShell();
+  if (state.gpsAuto && state.locations.some(l => l.gps)) state.activeId = 'gps'; // open on where you are
   refresh();
+  const swReady = ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost'))
+    ? navigator.serviceWorker.register('sw.js').then(r => { swReg = r; r.update().catch(() => {}); return navigator.serviceWorker.ready; }).then(r => { swReg = r; }).catch(() => {})
+    : Promise.resolve();
+  if ('serviceWorker' in navigator) {
+    let had = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) location.reload(); had = true; });
+  }
   (async () => {
-    const hasGps = state.locations.some(l => l.gps);
-    let granted = false;
-    try { granted = (await navigator.permissions.query({ name: 'geolocation' })).state === 'granted'; } catch (e) { /* unsupported */ }
-    if (state.firstRun || (hasGps && state.gpsAuto && granted)) {
-      try {
-        const before = activeLoc().id;
-        await useMyLocation(state.firstRun || before === 'gps');
-        // first launch: the GPS place replaces the starter location
-        if (state.firstRun) state.locations = state.locations.filter(l => l.id !== DEFAULT_LOC.id);
-        refresh();
-      } catch (e) { if (state.firstRun) toast('Tip: tap ☰ to add places or use your location'); }
-    }
+    await locate(true);
     save();
+    await refresh();
+    await swReady;
+    if (canNotify() && Notification.permission === 'granted') enableBackground();
+    await notifyCheck();
   })();
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
