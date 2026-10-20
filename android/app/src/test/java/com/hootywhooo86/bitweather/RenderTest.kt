@@ -76,7 +76,7 @@ class RenderTest {
     @Test
     fun widgets() {
         val sizes = listOf(
-            "now" to (250 to 110), "now" to (320 to 200), "now" to (330 to 400), "now" to (130 to 70),
+            "now" to (250 to 110), "now" to (320 to 200), "now" to (330 to 400), "now" to (290 to 280), "now" to (130 to 70),
             "hourly" to (320 to 120), "hourly" to (330 to 260),
             "daily" to (320 to 130), "daily" to (330 to 300),
             "details" to (160 to 160), "details" to (330 to 200),

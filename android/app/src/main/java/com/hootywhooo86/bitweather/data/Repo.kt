@@ -32,9 +32,6 @@ object LocationHelper {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
-    fun hasBackground(ctx: Context) = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
-
     @SuppressLint("MissingPermission")
     suspend fun current(ctx: Context): Location? {
         if (!hasPermission(ctx)) return null
@@ -143,16 +140,14 @@ object Repo {
     }
 
     /**
-     * The 30-minute update: follow the current location, fetch weather for it (and the place on screen),
+     * The update: optionally sync the current location, fetch weather for it (and the place on screen),
      * redraw the home-screen widgets and send notifications.
      */
-    suspend fun cycle(ctx: Context, force: Boolean, foreground: Boolean): WeatherBundle? = cycleLock.withLock {
+    suspend fun cycle(ctx: Context, force: Boolean, foreground: Boolean, relocate: Boolean = false): WeatherBundle? = cycleLock.withLock {
         Prefs.init(ctx)
-        val home0 = Prefs.home()
-        val stale = force || !isFresh(cached(ctx, home0.id))
-        if (stale && (Prefs.followGps || Prefs.firstRun)) {
-            val canBg = foreground || LocationHelper.hasBackground(ctx)
-            if (canBg) runCatching { locate(ctx, select = foreground && (Prefs.activeId == "gps" || Prefs.firstRun)) }
+        // Location syncs every time the app is opened; background runs reuse the last synced spot.
+        if ((relocate && Prefs.followGps) || Prefs.firstRun) {
+            runCatching { locate(ctx, select = foreground && (Prefs.activeId == "gps" || Prefs.firstRun)) }
         }
         val home = Prefs.home()
         val hb = runCatching { fetch(ctx, home, force) }.getOrNull()

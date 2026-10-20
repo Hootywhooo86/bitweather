@@ -187,16 +187,11 @@ fun SettingsScreen(act: MainActivity) {
                 Prefs.followGps = !Prefs.followGps; act.changed(); if (Prefs.followGps) act.refresh(true)
             }
         }
-        val fg = LocationHelper.hasPermission(ctx); val bg = LocationHelper.hasBackground(ctx)
-        T(
-            when { !fg -> "Location permission: OFF"; !bg -> "Location: while using the app"; else -> "Location: all the time ✓" },
-            8.sp, if (fg && bg) C.green else C.yellow, Modifier.padding(top = 10.dp, bottom = 10.dp),
-        )
-        Chips {
-            if (!fg) PxButton("ALLOW LOCATION", primary = true) { act.requestLocation() }
-            else if (!bg) PxButton("ALLOW ALL THE TIME", primary = true) { act.requestBackgroundLocation() }
-        }
-        Note("The app opens on where you are. Your location and weather refresh every 30 minutes. Choose \"Allow all the time\" so home-screen widgets and alerts follow you while the app is closed.")
+        val fg = LocationHelper.hasPermission(ctx)
+        T(if (fg) "Location: allowed ✓" else "Location permission: OFF", 8.sp, if (fg) C.green else C.yellow,
+            Modifier.padding(top = 10.dp, bottom = 10.dp), family = androidx.compose.ui.text.font.FontFamily.Default)
+        if (!fg) Chips { PxButton("ALLOW LOCATION", primary = true) { act.requestLocation() } }
+        Note("Your location syncs every time you open the app. Widgets and alerts update every 30 minutes in the background for the last synced spot.")
 
         Section("NOTIFICATIONS")
         val allowed = Notifier.allowed(ctx)
@@ -205,14 +200,13 @@ fun SettingsScreen(act: MainActivity) {
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PxButton("! Weather alerts: ${if (Prefs.notifyAlerts) "ON" else "OFF"}", on = Prefs.notifyAlerts) { Prefs.notifyAlerts = !Prefs.notifyAlerts; act.changed() }
-            PxButton("Conditions every 30 min: ${if (Prefs.notifyConditions) "ON" else "OFF"}", on = Prefs.notifyConditions) {
+            PxButton("Forecast every 6 hours: ${if (Prefs.notifyConditions) "ON" else "OFF"}", on = Prefs.notifyConditions) {
                 Prefs.notifyConditions = !Prefs.notifyConditions; act.changed()
-                Repo.cached(ctx, Prefs.home().id)?.let { Notifier.process(ctx, it) }
             }
             PxButton("App updates: ${if (Prefs.notifyUpdates) "ON" else "OFF"}", on = Prefs.notifyUpdates) { Prefs.notifyUpdates = !Prefs.notifyUpdates; act.changed() }
         }
         if (allowed) Chips { PxButton("SEND TEST") { Notifier.test(ctx, Repo.cached(ctx, Prefs.home().id)) } }
-        Note("Alerts cover official warnings (Environment Canada / US NWS) plus your custom alerts below, for your current location. Each alert notifies once.")
+        Note("Alerts arrive as soon as they're issued: official warnings (Environment Canada / US NWS) plus your custom alerts below, each once. The forecast summary comes every 6 hours. Nothing stays pinned in your notifications.")
 
         Section("CUSTOM ALERTS (NEXT 48 H, METRIC)")
         val t = Prefs.thresholds

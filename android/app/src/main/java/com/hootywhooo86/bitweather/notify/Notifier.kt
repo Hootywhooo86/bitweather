@@ -23,7 +23,8 @@ import com.hootywhooo86.bitweather.ui.MainActivity
 
 object Notifier {
     const val CH_ALERTS = "alerts"
-    const val CH_NOW = "conditions"
+    const val CH_SUMMARY = "forecast6h"
+    const val SUMMARY_MS = 6 * 3600_000L
     const val CH_UPDATES = "updates"
     private const val ID_NOW = 1
     private const val ID_UPDATE = 2
@@ -34,9 +35,10 @@ object Notifier {
         nm.createNotificationChannel(NotificationChannel(CH_ALERTS, "Weather alerts", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Official warnings and your custom alerts"
         })
-        nm.createNotificationChannel(NotificationChannel(CH_NOW, "Current conditions", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "Quiet update every 30 minutes"
-            setShowBadge(false)
+        // the old always-on 30-minute channel is gone; deleting it also clears its notification
+        nm.deleteNotificationChannel("conditions")
+        nm.createNotificationChannel(NotificationChannel(CH_SUMMARY, "Forecast every 6 hours", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Conditions and what's coming, four times a day"
         })
         nm.createNotificationChannel(NotificationChannel(CH_UPDATES, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "A new version of Bitweather is available"
@@ -61,7 +63,7 @@ object Notifier {
         runCatching { NotificationManagerCompat.from(ctx).notify(id, b.build()) }
     }
 
-    /** New alerts notify once each; the conditions notification is refreshed in place. */
+    /** New alerts notify once each, right away; the forecast summary goes out at most every 6 hours. */
     fun process(ctx: Context, b: WeatherBundle) {
         val alerts = Derive.allAlerts(b)
         val where = b.place.name
@@ -85,21 +87,22 @@ object Notifier {
             }
             Prefs.save()
         }
-        if (Prefs.notifyConditions) {
-            val nb = NotificationCompat.Builder(ctx, CH_NOW)
+        val now = System.currentTimeMillis()
+        // a little slack so a 30-minute background run landing just short of 6 h still counts
+        if (Prefs.notifyConditions && now - Prefs.lastSummary >= SUMMARY_MS - 20 * 60_000L) {
+            Prefs.lastSummary = now
+            Prefs.save()
+            val nb = NotificationCompat.Builder(ctx, CH_SUMMARY)
                 .setSmallIcon(R.drawable.ic_stat_bw)
                 .setLargeIcon(icon)
                 .setContentTitle("$where  ${com.hootywhooo86.bitweather.data.Fmt.t(w.current.temp)}")
                 .setContentText(Derive.nowSummary(w))
                 .setStyle(NotificationCompat.BigTextStyle().bigText(Derive.nowSummary(w) + "\n" + Derive.insight(b).second))
-                .setOnlyAlertOnce(true)
-                .setSilent(true)
                 .setShowWhen(true)
+                .setAutoCancel(true)
                 .setColor(0xFFB388FF.toInt())
                 .setContentIntent(openApp(ctx))
             post(ctx, ID_NOW, nb)
-        } else {
-            NotificationManagerCompat.from(ctx).cancel(ID_NOW)
         }
     }
 

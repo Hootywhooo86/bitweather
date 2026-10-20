@@ -81,9 +81,11 @@ class MainActivity : ComponentActivity() {
         if (Prefs.firstRun) askFirstRun()
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                // every time the app is opened: sync location, then refresh every 30 min while it stays open
+                refresh(force = false, relocate = true)
                 while (isActive) {
-                    refresh(force = false)
                     delay(Repo.UPDATE_MS)
+                    refresh(force = false)
                 }
             }
         }
@@ -100,12 +102,6 @@ class MainActivity : ComponentActivity() {
         locationPerms.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
-    /** "Allow all the time" so widgets can follow you while the app is closed. */
-    fun requestBackgroundLocation() {
-        if (!LocationHelper.hasPermission(this)) { requestLocation(); return }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) singlePerm.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-    }
-
     fun requestNotifications() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             singlePerm.launch(Manifest.permission.POST_NOTIFICATIONS); return
@@ -120,11 +116,11 @@ class MainActivity : ComponentActivity() {
 
     fun openUrl(url: String) = runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 
-    fun refresh(force: Boolean) {
+    fun refresh(force: Boolean, relocate: Boolean = force) {
         lifecycleScope.launch {
             AppModel.loading = true
             try {
-                val r = Repo.cycle(this@MainActivity, force, foreground = true)
+                val r = Repo.cycle(this@MainActivity, force, foreground = true, relocate = relocate)
                 if (r == null && Repo.cached(this@MainActivity, Prefs.active().id) == null) AppModel.say("Could not load weather — check your connection")
                 else if (r?.stale == true && force) AppModel.say("Offline — showing saved forecast")
             } finally {

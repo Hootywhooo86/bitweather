@@ -34,6 +34,7 @@ object Prefs {
     var firstRun = true
     var lastUpdateCheck = 0L
     var lastUpdateNotified = 0
+    var lastSummary = 0L
 
     fun defaultLayout() = mutableListOf(
         Slot("alerts", "T"), Slot("brief", "W"), Slot("insight", "T"), Slot("hourly", "W"), Slot("daily", "L"),
@@ -80,6 +81,7 @@ object Prefs {
             firstRun = o.optBoolean("firstRun", false)
             lastUpdateCheck = o.optLong("lastUpdateCheck")
             lastUpdateNotified = o.optInt("lastUpdateNotified")
+            lastSummary = o.optLong("lastSummary")
         }
         if (places.none { it.id == activeId }) activeId = places.first().id
     }
@@ -99,7 +101,7 @@ object Prefs {
             .put("notifyUpdates", notifyUpdates)
             .put("layout", JSONArray().apply { layout.forEach { put(JSONObject().put("id", it.id).put("size", it.size).put("hidden", it.hidden)) } })
             .put("seen", JSONArray(seen.toList()))
-            .put("firstRun", firstRun).put("lastUpdateCheck", lastUpdateCheck).put("lastUpdateNotified", lastUpdateNotified)
+            .put("firstRun", firstRun).put("lastUpdateCheck", lastUpdateCheck).put("lastUpdateNotified", lastUpdateNotified).put("lastSummary", lastSummary)
         sp.edit().putString("state", o.toString()).apply()
     }
 

@@ -149,6 +149,27 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         return w
     }
 
+    /** Big temperature: digits plus a pixel-ring degree sign hugging the last digit. Returns width. */
+    private fun bigTemp(temp: Double, x: Float, top: Float, size: Float, align: Int = -1): Float {
+        val num = Fmt.t(temp).removeSuffix("°")
+        tp.textSize = size
+        val bounds = android.graphics.Rect()
+        tp.getTextBounds(num, 0, num.length, bounds)
+        val u = size / 10f
+        val total = bounds.right + u + 3 * u
+        val sx = if (align == 0) x - total / 2 else x
+        text(num, sx, top, size, INK, shadow = true)
+        val dx = sx + bounds.right + u; val dy = top + size * 0.875f + bounds.top
+        for ((col, off) in listOf(0x73000000 to size * 0.12f, INK to 0f)) {
+            fp.color = col
+            c.drawRect(dx + off, dy + off, dx + 3 * u + off, dy + u + off, fp)
+            c.drawRect(dx + off, dy + 2 * u + off, dx + 3 * u + off, dy + 3 * u + off, fp)
+            c.drawRect(dx + off, dy + u + off, dx + u + off, dy + 2 * u + off, fp)
+            c.drawRect(dx + 2 * u + off, dy + u + off, dx + 3 * u + off, dy + 2 * u + off, fp)
+        }
+        return total
+    }
+
     private fun icon(code: Int, day: Boolean, x: Float, y: Float, size: Float) =
         PixelIcons.draw(c, PixelIcons.grid(Wmo.kind(code), day), x, y, size)
 
@@ -209,13 +230,13 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         val tx = pad + iconS + 8
         val tempSize = if (tiny) min(22f, mainH * 0.5f) else min(30f, mainH * 0.4f)
         if (tiny) {
-            text(Fmt.t(cur.temp), tx, y + (mainH - tempSize) / 2 - 4, tempSize, INK, shadow = true)
+            bigTemp(cur.temp, tx, y + (mainH - tempSize) / 2 - 4, tempSize)
             text("${Fmt.t(D.tmax.at(d))}/${Fmt.t(D.tmin.at(d))}", tx, y + (mainH + tempSize) / 2 + 2, 7f, INK, maxW = W - tx - pad)
             return
         }
         var ty = y + max(0f, (mainH - (tempSize + 36)) / 2)
-        val tw = text(Fmt.t(cur.temp), tx, ty, tempSize, INK, shadow = true)
-        val rx = tx + tw + 10
+        val tw = bigTemp(cur.temp, tx, ty, tempSize)
+        val rx = tx + tw + 12
         if (W - rx > 70) {
             text("H ${Fmt.t(D.tmax.at(d))}", rx, ty + 2, 8f, INK)
             text("L ${Fmt.t(D.tmin.at(d))}", rx, ty + 14, 8f, INK)
@@ -224,22 +245,22 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         text(Wmo.name(cur.code), tx, ty, 8f, INK, maxW = W - tx - pad)
         ty += 13
         text("Feels ${Fmt.t(cur.feels)}  ${Fmt.w(cur.wind)} ${Fmt.compass8(cur.windDir)}", tx, ty, 7f, 0xD9FFFFFF.toInt(), maxW = W - tx - pad)
-        y += mainH + 8
+        y += mainH + 10
         // hourly strip if there's room
-        if (H - y - pad >= 62) {
+        if (H - y - pad >= 54) {
             box(pad, y - 2, W - pad, y - 1, 0x40FFFFFF)
-            val stripH = min(66f, H - y - pad)
+            val stripH = 52f
             val n = floor((W - 2 * pad) / 44f).toInt().coerceIn(1, 12)
             val cw = (W - 2 * pad) / n
             val hrs = Derive.hoursAhead(w, n)
             hrs.forEachIndexed { k, i ->
                 val cx = pad + cw * k + cw / 2
                 text(Fmt.t(w.hourly.temp.at(i)), cx, y + 2, 8f, INK, 0)
-                val s = min(24f, stripH - 34)
-                icon(w.hourly.code.at(i), w.hourly.isDay.at(i) == 1, cx - s / 2, y + 14, s)
-                text(if (k == 0) "Now" else Fmt.clock(w.hourly.time[i]), cx, y + 18 + s, 7f, if (k == 0) ORANGE else DIM, 0)
+                val s = 24f
+                icon(w.hourly.code.at(i), w.hourly.isDay.at(i) == 1, cx - s / 2, y + 13, s)
+                text(if (k == 0) "Now" else Fmt.clock(w.hourly.time[i]), cx, y + 41, 7f, if (k == 0) ORANGE else DIM, 0)
             }
-            y += stripH + 6
+            y += stripH + 8
         }
         // daily rows if there's still room
         if (H - y - pad >= 40) {
@@ -256,17 +277,21 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         val rowH = (bottom - t) / n
         val lo = ds.minOf { D.tmin.at(it) }; val hi = ds.maxOf { D.tmax.at(it) }; val span = max(1.0, hi - lo)
         val ts = min(8f, rowH * 0.45f)
+        val hasPop = r - l > 200 && ds.any { D.popMax.at(it) > 0 }
         ds.forEachIndexed { k, i ->
             val y = t + k * rowH
             val mid = y + rowH / 2
             text(if (i == w.d0()) "Today" else Fmt.dow(D.time[i]), l, mid - ts / 2, ts, INK)
             val iconS = min(rowH - 2, 20f)
-            icon(D.code.at(i), true, l + 48, mid - iconS / 2, iconS)
+            icon(D.code.at(i), true, l + 46, mid - iconS / 2, iconS)
+            // columns pack left: day, icon, rain chance (only if any day has one), low, bar, high
+            val popX = l + 46 + iconS + 6
             val pop = D.popMax.at(i)
-            if (pop > 0 && r - l > 200) text("$pop%", l + 72, mid - 3.5f, 7f, CYAN)
-            val barL = l + if (r - l > 200) 140 else 108
-            val barR = r - 34
-            text(Fmt.t(D.tmin.at(i)), barL - 4, mid - ts / 2, ts, DIM, 1)
+            if (hasPop && pop > 0) text("$pop%", popX, mid - 3.5f, 7f, CYAN)
+            val loRight = popX + (if (hasPop) 34 else 0) + 30
+            val barL = loRight + 8
+            val barR = r - 36
+            text(Fmt.t(D.tmin.at(i)), loRight, mid - ts / 2, ts, 0xFFC5CAE9.toInt(), 1)
             text(Fmt.t(D.tmax.at(i)), r, mid - ts / 2, ts, INK, 1)
             if (barR - barL > 20) {
                 box(barL, mid - 3, barR, mid + 3, 0xFF101024.toInt())
