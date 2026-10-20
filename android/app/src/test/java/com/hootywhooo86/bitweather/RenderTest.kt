@@ -74,6 +74,28 @@ class RenderTest {
     }
 
     @Test
+    fun sixHourSummaryPopsUpAndReschedules() {
+        Prefs.notifyConditions = true
+        Prefs.lastSummary = 0
+        shadowOf(ctx as android.app.Application).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+        val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+        com.hootywhooo86.bitweather.notify.Notifier.channels(ctx)
+        val ch = nm.getNotificationChannel(com.hootywhooo86.bitweather.notify.Notifier.CH_SUMMARY)
+        assertTrue("summary channel must pop up", ch.importance == android.app.NotificationManager.IMPORTANCE_HIGH)
+        assertTrue(com.hootywhooo86.bitweather.notify.Notifier.summaryDue())
+        com.hootywhooo86.bitweather.notify.Notifier.process(ctx, bundle)
+        val posted = shadowOf(nm).allNotifications
+        assertTrue("summary posted", posted.any { it.channelId == com.hootywhooo86.bitweather.notify.Notifier.CH_SUMMARY })
+        // not due again until 6 hours later
+        org.junit.Assert.assertFalse(com.hootywhooo86.bitweather.notify.Notifier.summaryDue())
+        val am = ctx.getSystemService(android.app.AlarmManager::class.java)
+        val next = shadowOf(am).nextScheduledAlarm
+        assertNotNull("next 6h alarm scheduled", next)
+        val delta = next!!.triggerAtTime - System.currentTimeMillis()
+        assertTrue("alarm ~6h out, was $delta", delta in (6 * 3600_000L - 60_000L)..(6 * 3600_000L + 60_000L))
+    }
+
+    @Test
     fun widgets() {
         val sizes = listOf(
             "now" to (250 to 110), "now" to (320 to 200), "now" to (330 to 400), "now" to (290 to 280), "now" to (130 to 70),

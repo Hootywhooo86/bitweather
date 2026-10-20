@@ -3,6 +3,7 @@ package com.hootywhooo86.bitweather
 import android.app.Application
 import com.hootywhooo86.bitweather.data.Prefs
 import com.hootywhooo86.bitweather.notify.Notifier
+import com.hootywhooo86.bitweather.notify.SummaryAlarm
 import com.hootywhooo86.bitweather.work.UpdateWorker
 
 class BitweatherApp : Application() {
@@ -11,5 +12,6 @@ class BitweatherApp : Application() {
         Prefs.init(this)
         Notifier.channels(this)
         runCatching { UpdateWorker.schedule(this) }
+        SummaryAlarm.schedule(this)
     }
 }

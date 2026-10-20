@@ -37,9 +37,9 @@ Native Kotlin app (Jetpack Compose) with **real home-screen widgets**. Install t
   - **Hourly:** a forecast strip. Make it taller to add a temperature chart.
   - **10-day:** pills when it's short, range-bar rows when it's tall.
   - **Details:** a grid of wind, humidity, UV, air quality, sun, pressure, precipitation and visibility tiles that fills whatever size you give it.
-- **Current location:** the app opens on where you are. Location and weather refresh every 30 minutes in the background (WorkManager). Choose "Allow all the time" so widgets follow you while the app is closed.
+- **Current location:** the app opens on where you are. Location and weather refresh every 15 minutes in the background (WorkManager), so widgets follow you. This needs "Allow all the time" location access.
 - **In the app:** every card from the screenshots in 4 sizes (✎ to resize, reorder, remove or add), unlimited saved places with search (swipe to switch), a day detail view, alerts, an animated radar, units, and custom alert thresholds.
-- **Notifications:** official alerts (Environment Canada / US NWS) plus custom alerts (each sent once), a quiet conditions notification every 30 minutes, and **app updates** (it checks GitHub Releases and taps through to the new APK).
+- **Notifications:** official alerts (Environment Canada / US NWS) plus custom alerts (each sent once), a pop-up forecast every 6 hours (set by an alarm), and **app updates** (it checks GitHub Releases and taps through to the new APK).
 - **Build locally:** `cd android && ./gradlew assembleRelease` (needs the Android SDK). `./gradlew testDebugUnitTest` renders widget and screen previews into `android/app/build/previews/`.
 - **Signing:** `android/keystore/bitweather.jks` is a fixed key, committed so CI builds always update the installed app in place. Its password is in `app/build.gradle.kts`. Fine for a sideloaded personal app. Move it to GitHub secrets before any Play Store release.
 

@@ -23,7 +23,7 @@ import com.hootywhooo86.bitweather.ui.MainActivity
 
 object Notifier {
     const val CH_ALERTS = "alerts"
-    const val CH_SUMMARY = "forecast6h"
+    const val CH_SUMMARY = "forecast_6h"
     const val SUMMARY_MS = 6 * 3600_000L
     const val CH_UPDATES = "updates"
     private const val ID_NOW = 1
@@ -37,7 +37,9 @@ object Notifier {
         })
         // the old always-on 30-minute channel is gone; deleting it also clears its notification
         nm.deleteNotificationChannel("conditions")
-        nm.createNotificationChannel(NotificationChannel(CH_SUMMARY, "Forecast every 6 hours", NotificationManager.IMPORTANCE_DEFAULT).apply {
+        // v1.0.2's summary channel was too quiet to pop up; channel importance can't be raised, so replace it
+        nm.deleteNotificationChannel("forecast6h")
+        nm.createNotificationChannel(NotificationChannel(CH_SUMMARY, "Forecast every 6 hours", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Conditions and what's coming, four times a day"
         })
         nm.createNotificationChannel(NotificationChannel(CH_UPDATES, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
@@ -68,7 +70,6 @@ object Notifier {
         val alerts = Derive.allAlerts(b)
         val where = b.place.name
         val w = b.weather
-        val icon = PixelIcons.bitmap(Wmo.kind(w.current.code), w.current.isDay, 128)
         synchronized(Prefs) {
             for (a in alerts) {
                 if (!Prefs.seen.add(a.key)) continue
@@ -87,11 +88,21 @@ object Notifier {
             }
             Prefs.save()
         }
-        val now = System.currentTimeMillis()
-        // a little slack so a 30-minute background run landing just short of 6 h still counts
-        if (Prefs.notifyConditions && now - Prefs.lastSummary >= SUMMARY_MS - 20 * 60_000L) {
-            Prefs.lastSummary = now
-            Prefs.save()
+        if (summaryDue()) summary(ctx, b)
+    }
+
+    // a little slack so a run landing just short of 6 h still counts
+    fun summaryDue() = Prefs.notifyConditions && System.currentTimeMillis() - Prefs.lastSummary >= SUMMARY_MS - 10 * 60_000L
+
+    /** The 6-hour forecast notification (pops up). Schedules the next one. */
+    fun summary(ctx: Context, b: WeatherBundle) {
+        val where = b.place.name
+        val w = b.weather
+        val icon = PixelIcons.bitmap(Wmo.kind(w.current.code), w.current.isDay, 128)
+        Prefs.lastSummary = System.currentTimeMillis()
+        Prefs.save()
+        SummaryAlarm.schedule(ctx)
+        run {
             val nb = NotificationCompat.Builder(ctx, CH_SUMMARY)
                 .setSmallIcon(R.drawable.ic_stat_bw)
                 .setLargeIcon(icon)
@@ -100,6 +111,7 @@ object Notifier {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(Derive.nowSummary(w) + "\n" + Derive.insight(b).second))
                 .setShowWhen(true)
                 .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setColor(0xFFB388FF.toInt())
                 .setContentIntent(openApp(ctx))
             post(ctx, ID_NOW, nb)

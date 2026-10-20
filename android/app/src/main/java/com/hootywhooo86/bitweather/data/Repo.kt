@@ -32,6 +32,9 @@ object LocationHelper {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
+    fun hasBackground(ctx: Context) = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
+
     @SuppressLint("MissingPermission")
     suspend fun current(ctx: Context): Location? {
         if (!hasPermission(ctx)) return null
@@ -71,7 +74,7 @@ object LocationHelper {
 }
 
 object Repo {
-    const val UPDATE_MS = 30 * 60 * 1000L
+    const val UPDATE_MS = 15 * 60 * 1000L
     private val mem = ConcurrentHashMap<String, WeatherBundle>()
     private val cycleLock = Mutex()
 
@@ -145,8 +148,10 @@ object Repo {
      */
     suspend fun cycle(ctx: Context, force: Boolean, foreground: Boolean, relocate: Boolean = false): WeatherBundle? = cycleLock.withLock {
         Prefs.init(ctx)
-        // Location syncs every time the app is opened; background runs reuse the last synced spot.
-        if ((relocate && Prefs.followGps) || Prefs.firstRun) {
+        // Location syncs when the app opens and on every 15-minute background run
+        // (background needs "Allow all the time"; otherwise the last synced spot is reused).
+        val canLocate = foreground || LocationHelper.hasBackground(ctx)
+        if (canLocate && ((relocate && Prefs.followGps) || Prefs.firstRun)) {
             runCatching { locate(ctx, select = foreground && (Prefs.activeId == "gps" || Prefs.firstRun)) }
         }
         val home = Prefs.home()

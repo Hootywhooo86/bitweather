@@ -102,6 +102,17 @@ class MainActivity : ComponentActivity() {
         locationPerms.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
 
+    /** "Allow all the time" so widgets follow you every 15 minutes while the app is closed. */
+    fun requestBackgroundLocation() {
+        if (!LocationHelper.hasPermission(this)) { requestLocation(); return }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) singlePerm.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    }
+
+    /** Some phones pause background apps; this opens the screen to let Bitweather run. */
+    fun openBatterySettings() {
+        runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }.onFailure { openAppSettings() }
+    }
+
     fun requestNotifications() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             singlePerm.launch(Manifest.permission.POST_NOTIFICATIONS); return

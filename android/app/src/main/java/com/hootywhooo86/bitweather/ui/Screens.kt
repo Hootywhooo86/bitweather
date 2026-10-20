@@ -187,11 +187,18 @@ fun SettingsScreen(act: MainActivity) {
                 Prefs.followGps = !Prefs.followGps; act.changed(); if (Prefs.followGps) act.refresh(true)
             }
         }
-        val fg = LocationHelper.hasPermission(ctx)
-        T(if (fg) "Location: allowed ✓" else "Location permission: OFF", 8.sp, if (fg) C.green else C.yellow,
-            Modifier.padding(top = 10.dp, bottom = 10.dp), family = androidx.compose.ui.text.font.FontFamily.Default)
-        if (!fg) Chips { PxButton("ALLOW LOCATION", primary = true) { act.requestLocation() } }
-        Note("Your location syncs every time you open the app. Widgets and alerts update every 30 minutes in the background for the last synced spot.")
+        val fg = LocationHelper.hasPermission(ctx); val bg = LocationHelper.hasBackground(ctx)
+        T(
+            when { !fg -> "Location permission: OFF"; !bg -> "Location: only while using the app"; else -> "Location: all the time ✓" },
+            8.sp, if (fg && bg) C.green else C.yellow, Modifier.padding(top = 10.dp, bottom = 10.dp),
+            family = androidx.compose.ui.text.font.FontFamily.Default,
+        )
+        Chips {
+            if (!fg) PxButton("ALLOW LOCATION", primary = true) { act.requestLocation() }
+            else if (!bg) PxButton("ALLOW ALL THE TIME", primary = true) { act.requestBackgroundLocation() }
+            PxButton("BATTERY: LET IT RUN") { act.openBatterySettings() }
+        }
+        Note("Your location syncs when you open the app and every 15 minutes in the background, so widgets show where you are. Background location needs \"Allow all the time\". If updates stop, set Bitweather's battery use to Unrestricted.")
 
         Section("NOTIFICATIONS")
         val allowed = Notifier.allowed(ctx)
@@ -202,6 +209,7 @@ fun SettingsScreen(act: MainActivity) {
             PxButton("! Weather alerts: ${if (Prefs.notifyAlerts) "ON" else "OFF"}", on = Prefs.notifyAlerts) { Prefs.notifyAlerts = !Prefs.notifyAlerts; act.changed() }
             PxButton("Forecast every 6 hours: ${if (Prefs.notifyConditions) "ON" else "OFF"}", on = Prefs.notifyConditions) {
                 Prefs.notifyConditions = !Prefs.notifyConditions; act.changed()
+                com.hootywhooo86.bitweather.notify.SummaryAlarm.schedule(ctx)
             }
             PxButton("App updates: ${if (Prefs.notifyUpdates) "ON" else "OFF"}", on = Prefs.notifyUpdates) { Prefs.notifyUpdates = !Prefs.notifyUpdates; act.changed() }
         }
