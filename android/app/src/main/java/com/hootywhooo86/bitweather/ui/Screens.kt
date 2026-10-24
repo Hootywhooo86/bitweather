@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -72,7 +71,7 @@ private fun Sheet(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun Field(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, number: Boolean = false) {
     BasicTextField(
-        value, onChange, modifier.background(C.panel, RoundedCornerShape(8.dp)).border(3.dp, C.edge, RoundedCornerShape(8.dp)).padding(12.dp),
+        value, onChange, modifier.background(C.panel, pixelShape(8.dp)).border(3.dp, C.edge, pixelShape(8.dp)).padding(12.dp),
         textStyle = TextStyle(fontFamily = Pixel, fontSize = 10.sp, color = Color.White),
         cursorBrush = SolidColor(C.purple), singleLine = true,
         keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Text) else KeyboardOptions.Default,
@@ -106,7 +105,7 @@ fun PlacesScreen(act: MainActivity) {
         Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!searching && q.trim().length >= 2 && results.isEmpty()) T("No places found.", 8.sp, C.dim)
             results.forEach { r ->
-                Row(Modifier.fillMaxWidth().background(C.panel, RoundedCornerShape(12.dp)).border(3.dp, C.edge, RoundedCornerShape(12.dp))
+                Row(Modifier.fillMaxWidth().background(C.panel, pixelShape(12.dp)).border(3.dp, C.edge, pixelShape(12.dp))
                     .clickable {
                         var p = Prefs.places.firstOrNull { !it.gps && Math.abs(it.lat - r.lat) < 0.01 && Math.abs(it.lon - r.lon) < 0.01 }
                         if (p == null) { p = r.copy(id = "p" + System.currentTimeMillis().toString(36)); Prefs.places.add(p) }
@@ -119,7 +118,7 @@ fun PlacesScreen(act: MainActivity) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        PxButton(if (locating) "LOCATING…" else "◎ USE MY LOCATION", primary = true) {
+        PxButton(if (locating) "LOCATING…" else "USE MY LOCATION", primary = true) {
             if (!LocationHelper.hasPermission(ctx)) { act.requestLocation(); return@PxButton }
             locating = true
             scope.launch {
@@ -134,12 +133,15 @@ fun PlacesScreen(act: MainActivity) {
                 val cb = Repo.cached(ctx, p.id)
                 val on = p.id == Prefs.activeId
                 Row(
-                    Modifier.fillMaxWidth().background(C.panel, RoundedCornerShape(12.dp)).border(3.dp, if (on) C.purple else C.edge, RoundedCornerShape(12.dp)).padding(10.dp),
+                    Modifier.fillMaxWidth().background(C.panel, pixelShape(12.dp)).border(3.dp, if (on) C.purple else C.edge, pixelShape(12.dp)).padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (cb != null) PixelIcon(cb.weather.current.code, cb.weather.current.isDay, 36.dp) else Spacer(Modifier.width(36.dp))
                     Column(Modifier.weight(1f).padding(horizontal = 10.dp).clickable { Prefs.activeId = p.id; act.changed(refetch = true); AppModel.screen = Screen.Home }) {
-                        T((if (p.gps) "◎ " else "") + p.name, 9.sp, lines = 1)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (p.gps) { Glyph("pin", 10.dp, C.orange); Spacer(Modifier.width(6.dp)) }
+                            T(p.name, 9.sp, lines = 1)
+                        }
                         val d = cb?.weather?.d0() ?: 0
                         T(p.subtitle + (cb?.let { " · ${Fmt.t(it.weather.daily.tmax.at(d))}/${Fmt.t(it.weather.daily.tmin.at(d))}" } ?: ""), 7.sp, C.dim, Modifier.padding(top = 6.dp), lines = 1)
                     }
@@ -157,7 +159,7 @@ fun PlacesScreen(act: MainActivity) {
                 }
             }
         }
-        Note("Swipe the big weather card on the home screen to flip between places. Home-screen widgets and notifications follow your current location (◎).")
+        Note("Swipe the big weather card on the home screen to flip between places. Home-screen widgets and notifications follow your current location (the pin).")
     }
 }
 
@@ -183,16 +185,15 @@ fun SettingsScreen(act: MainActivity) {
 
         Section("CURRENT LOCATION")
         Chips {
-            PxButton("◎ Follow my location: ${if (Prefs.followGps) "ON" else "OFF"}", on = Prefs.followGps) {
+            PxButton("Follow my location: ${if (Prefs.followGps) "ON" else "OFF"}", on = Prefs.followGps) {
                 Prefs.followGps = !Prefs.followGps; act.changed(); if (Prefs.followGps) act.refresh(true)
             }
         }
         val fg = LocationHelper.hasPermission(ctx); val bg = LocationHelper.hasBackground(ctx)
-        T(
-            when { !fg -> "Location permission: OFF"; !bg -> "Location: only while using the app"; else -> "Location: all the time ✓" },
-            8.sp, if (fg && bg) C.green else C.yellow, Modifier.padding(top = 10.dp, bottom = 10.dp),
-            family = androidx.compose.ui.text.font.FontFamily.Default,
-        )
+        Row(Modifier.padding(top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (fg && bg) { Glyph("check", 10.dp, C.green); Spacer(Modifier.width(6.dp)) }
+            T(when { !fg -> "Location permission: OFF"; !bg -> "Location: only while using the app"; else -> "Location: all the time" }, 8.sp, if (fg && bg) C.green else C.yellow)
+        }
         Chips {
             if (!fg) PxButton("ALLOW LOCATION", primary = true) { act.requestLocation() }
             else if (!bg) PxButton("ALLOW ALL THE TIME", primary = true) { act.requestBackgroundLocation() }
@@ -202,14 +203,16 @@ fun SettingsScreen(act: MainActivity) {
 
         Section("NOTIFICATIONS")
         val allowed = Notifier.allowed(ctx)
-        T(if (allowed) "✓ Notifications are on" else "Notifications are off", 8.sp, if (allowed) C.green else C.yellow, Modifier.padding(bottom = 10.dp), family = androidx.compose.ui.text.font.FontFamily.Default)
+        Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (allowed) { Glyph("check", 10.dp, C.green); Spacer(Modifier.width(6.dp)) }
+            T(if (allowed) "Notifications are on" else "Notifications are off", 8.sp, if (allowed) C.green else C.yellow)
+        }
         if (!allowed) Chips { PxButton("TURN ON NOTIFICATIONS", primary = true) { act.requestNotifications() } }
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PxButton("! Weather alerts: ${if (Prefs.notifyAlerts) "ON" else "OFF"}", on = Prefs.notifyAlerts) { Prefs.notifyAlerts = !Prefs.notifyAlerts; act.changed() }
             PxButton("Forecast every 6 hours: ${if (Prefs.notifyConditions) "ON" else "OFF"}", on = Prefs.notifyConditions) {
                 Prefs.notifyConditions = !Prefs.notifyConditions; act.changed()
-                com.hootywhooo86.bitweather.notify.SummaryAlarm.schedule(ctx)
             }
             PxButton("App updates: ${if (Prefs.notifyUpdates) "ON" else "OFF"}", on = Prefs.notifyUpdates) { Prefs.notifyUpdates = !Prefs.notifyUpdates; act.changed() }
         }
@@ -265,7 +268,7 @@ fun DayScreen(k: Int) {
         }
         Spacer(Modifier.height(16.dp))
         val idx = Derive.dayHours(w, k)
-        Box(Modifier.fillMaxWidth().height(160.dp).background(C.panel, RoundedCornerShape(16.dp)).border(4.dp, C.edge, RoundedCornerShape(16.dp)).padding(12.dp)) {
+        Box(Modifier.fillMaxWidth().height(160.dp).background(C.panel, pixelShape(16.dp)).border(4.dp, C.edge, pixelShape(16.dp)).padding(12.dp)) {
             TempChart(w, idx, Modifier.fillMaxSize())
         }
         Spacer(Modifier.height(12.dp))

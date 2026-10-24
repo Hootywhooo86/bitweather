@@ -101,7 +101,6 @@ object Notifier {
         val icon = PixelIcons.bitmap(Wmo.kind(w.current.code), w.current.isDay, 128)
         Prefs.lastSummary = System.currentTimeMillis()
         Prefs.save()
-        SummaryAlarm.schedule(ctx)
         run {
             val nb = NotificationCompat.Builder(ctx, CH_SUMMARY)
                 .setSmallIcon(R.drawable.ic_stat_bw)

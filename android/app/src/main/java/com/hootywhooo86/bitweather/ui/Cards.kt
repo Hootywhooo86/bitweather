@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -62,16 +61,11 @@ val CARD_SIZES = mapOf(
     "humidity" to listOf("S", "W"), "pressure" to listOf("S", "W"), "feels" to listOf("S", "W"), "moon" to listOf("S", "W"),
     "radar" to listOf("L", "W"),
 )
-private val GLYPH = mapOf(
-    "alerts" to "!", "brief" to "▤", "insight" to "↗", "hourly" to "◷", "daily" to "▦", "precip" to "⋮", "wind" to "≈",
-    "sun" to "☼", "uv" to "☀", "aqi" to "≋", "visibility" to "◉", "humidity" to "●", "pressure" to "⇕", "feels" to "♨",
-    "moon" to "☾", "radar" to "◎",
-)
 
 @Composable
 fun CardHead(id: String) {
     Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Sym(GLYPH[id] ?: "", 11.sp, C.purple)
+        Glyph(id, 12.dp, C.purple)
         Spacer(Modifier.width(8.dp))
         T(CARD_NAMES[id]!!.uppercase(), 8.sp, C.orange, lines = 1)
     }
@@ -131,7 +125,7 @@ fun CardBody(act: MainActivity, id: String, sz: String, b: WeatherBundle) {
         "insight" -> {
             val (g, t) = Derive.insight(b)
             if (sz == "S") Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Sym(g, 28.sp, C.orange); T(t, 8.sp, Color.White, Modifier.padding(top = 8.dp), align = TextAlign.Center, lh = 14.sp)
+                Glyph(g, 28.dp, C.orange); T(t, 8.sp, Color.White, Modifier.padding(top = 8.dp), align = TextAlign.Center, lh = 14.sp)
             } else T(t, 9.sp, Color.White, lh = 16.sp)
         }
         "hourly" -> HourlyCard(w, sz)
@@ -168,7 +162,7 @@ fun CardBody(act: MainActivity, id: String, sz: String, b: WeatherBundle) {
         }
         "pressure" -> PressureCard(w, sz)
         "feels" -> Column(Modifier.fillMaxSize(), verticalArrangement = if (sz == "S") Arrangement.Center else Arrangement.Top) {
-            Big(Fmt.t(w.current.feels))
+            BigTemp(Fmt.t(w.current.feels), 24.sp)
             Lbl("Actual ${Fmt.t(w.current.temp)}\n${Derive.feelsWhy(w.current)}", modifier = Modifier.padding(top = 8.dp))
             if (sz != "S") {
                 Spacer(Modifier.weight(1f))
@@ -196,7 +190,10 @@ fun CardBody(act: MainActivity, id: String, sz: String, b: WeatherBundle) {
 private fun AlertsCard(b: WeatherBundle, sz: String) {
     val a = Derive.allAlerts(b)
     if (a.isEmpty()) {
-        T("✓ All clear — no alerts${if (b.place.cc == "CA" || b.place.cc == "US") "" else " (official alerts: Canada & US)"}.", 9.sp, Color(0xFFDDDDDD), lh = 16.sp, family = androidx.compose.ui.text.font.FontFamily.Default)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Glyph("check", 12.dp, C.green); Spacer(Modifier.width(8.dp))
+            T("All clear — no alerts${if (b.place.cc == "CA" || b.place.cc == "US") "" else " (official alerts: Canada & US)"}.", 9.sp, Color(0xFFDDDDDD), lh = 16.sp)
+        }
         return
     }
     val list = if (sz == "W") a else a.take(1)
@@ -268,7 +265,7 @@ private fun DailyCard(w: Weather, sz: String) {
         LazyRow(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(ds) { k ->
                 Column(
-                    Modifier.width(56.dp).fillMaxHeight().background(C.panel2, RoundedCornerShape(28.dp)).border(3.dp, C.edge, RoundedCornerShape(28.dp))
+                    Modifier.width(56.dp).fillMaxHeight().background(C.panel2, pixelShape(28.dp)).border(3.dp, C.edge, pixelShape(28.dp))
                         .clickable { AppModel.screen = Screen.Day(k) }.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -342,16 +339,18 @@ private fun Compass(deg: Double, speed: String, unit: String, modifier: Modifier
                 val s = 4.dp.toPx()
                 var d = -r * 0.75f
                 while (d <= r * 0.75f) {
-                    drawRect(C.orange, Offset(cx + (sin(to) * d).toFloat() - s / 2, cy - (cos(to) * d).toFloat() - s / 2), Size(s, s))
+                    drawRect(C.orange, Offset(kotlin.math.floor((cx + (sin(to) * d).toFloat()) / s) * s, kotlin.math.floor((cy - (cos(to) * d).toFloat()) / s) * s), Size(s, s))
                     d += s * 1.2f
                 }
-                val hx = cx + (sin(to) * r * 0.78).toFloat(); val hy = cy - (cos(to) * r * 0.78).toFloat()
-                val p = Path().apply {
-                    moveTo(hx, hy)
-                    lineTo(cx + (sin(to - 0.35) * r * 0.5).toFloat(), cy - (cos(to - 0.35) * r * 0.5).toFloat())
-                    lineTo(cx + (sin(to + 0.35) * r * 0.5).toFloat(), cy - (cos(to + 0.35) * r * 0.5).toFloat()); close()
+                // pixel arrowhead: rows of blocks widening back from the tip, snapped to the block grid
+                for (k in 0..3) {
+                    val d = r * 0.78f - k * s
+                    for (o in -k..k) {
+                        val bx = cx + (sin(to) * d).toFloat() + (cos(to) * o * s).toFloat()
+                        val by = cy - (cos(to) * d).toFloat() + (sin(to) * o * s).toFloat()
+                        drawRect(C.orange, Offset(kotlin.math.floor(bx / s) * s, kotlin.math.floor(by / s) * s), Size(s, s))
+                    }
                 }
-                drawPath(p, C.orange)
             }
         }
         Column(Modifier.background(C.panel).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -405,8 +404,8 @@ private fun SunCard(w: Weather, sz: String) {
             if (f !in 0f..1f) T(if (f < 0) "BEFORE DAWN" else "AFTER DUSK", 7.sp, C.purple)
         }
         if (sz == "S") {
-            Row(verticalAlignment = Alignment.CenterVertically) { Sym("☼ ", 10.sp); T(Fmt.clock(rise), 8.sp) }
-            Row(verticalAlignment = Alignment.CenterVertically) { Sym("☾ ", 10.sp); T(Fmt.clock(set), 8.sp) }
+            Row(verticalAlignment = Alignment.CenterVertically) { Glyph("sun", 10.dp, C.orange); Spacer(Modifier.width(6.dp)); T(Fmt.clock(rise), 8.sp) }
+            Row(verticalAlignment = Alignment.CenterVertically) { Glyph("moon", 10.dp, C.purple); Spacer(Modifier.width(6.dp)); T(Fmt.clock(set), 8.sp) }
         } else {
             val len = D.daylight.at(d); val dl = if (d + 1 < D.time.size) ((D.daylight.at(d + 1) - len) / 60).roundToInt() else 0
             Kv(listOf("Sunrise" to Fmt.clock(rise), "Sunset" to Fmt.clock(set), "Daylight" to "${(len / 3600).toInt()}h ${((len % 3600) / 60).roundToInt()}m"), 3)

@@ -74,7 +74,7 @@ object LocationHelper {
 }
 
 object Repo {
-    const val UPDATE_MS = 15 * 60 * 1000L
+    const val UPDATE_MS = 10 * 60 * 1000L
     private val mem = ConcurrentHashMap<String, WeatherBundle>()
     private val cycleLock = Mutex()
 

@@ -17,11 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -95,7 +95,10 @@ private fun TopBar(act: MainActivity, place: Place, b: WeatherBundle?) {
     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PxButton("☰", symbol = true) { AppModel.screen = Screen.Places }
         Column(Modifier.weight(1f)) {
-            T((if (place.gps) "◎ " else "") + place.name.uppercase(), 12.sp, C.purple, lines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (place.gps) { Glyph("pin", 12.dp, C.orange); Spacer(Modifier.width(6.dp)) }
+                T(place.name.uppercase(), 12.sp, C.purple, lines = 1)
+            }
             val upd = when {
                 AppModel.loading && b == null -> "Loading…"
                 b != null -> "${if (place.admin.isNotBlank()) place.admin + " · " else ""}Updated ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(b.fetchedAt))}${if (b.stale) " (offline)" else " · every 30 min"}"
@@ -127,11 +130,16 @@ fun skyBands(b: WeatherBundle?): List<Color> {
 private fun Hero(act: MainActivity, place: Place, b: WeatherBundle?) {
     val bands = skyBands(b)
     val stops = bands.flatMapIndexed { i, c -> listOf(i / 4f to c, (i + 1) / 4f - 0.0001f to c) }.toTypedArray()
-    val shape = RoundedCornerShape(18.dp)
+    val shape = pixelShape(18.dp)
     var drag = 0f
-    Column(
+    val cur = b?.weather?.current
+    Box(
         Modifier.padding(horizontal = 12.dp).fillMaxWidth()
-            .background(Brush.verticalGradient(*stops), shape).border(4.dp, C.edge, shape)
+            .background(Brush.verticalGradient(*stops), shape).clip(shape).border(4.dp, C.edge, shape),
+    ) {
+    PixelWeatherFx(Wmo.kind(cur?.code ?: 2), cur?.isDay ?: true, Modifier.matchParentSize())
+    Column(
+        Modifier.fillMaxWidth()
             .pointerInput(Prefs.places.size) {
                 detectHorizontalDragGestures(
                     onDragStart = { drag = 0f },
@@ -146,7 +154,7 @@ private fun Hero(act: MainActivity, place: Place, b: WeatherBundle?) {
         } else {
             val w = b.weather; val c = w.current; val d = w.d0()
             PixelIcon(c.code, c.isDay, 96.dp)
-            T(Fmt.t(c.temp), 42.sp, Color.White, Modifier.padding(top = 4.dp))
+            BigTemp(Fmt.t(c.temp), 42.sp, Color.White, Modifier.padding(top = 4.dp))
             T(Wmo.name(c.code), 11.sp, Color.White, Modifier.padding(top = 12.dp))
             T("Feels like ${Fmt.t(c.feels)}", 9.sp, Color.White.copy(alpha = 0.85f), Modifier.padding(top = 10.dp))
             T("High ${Fmt.t(w.daily.tmax.at(d))} · Low ${Fmt.t(w.daily.tmin.at(d))}", 9.sp, Color.White.copy(alpha = 0.85f), Modifier.padding(top = 8.dp))
@@ -162,7 +170,12 @@ private fun Hero(act: MainActivity, place: Place, b: WeatherBundle?) {
                 )
             }
         }
-        if (Prefs.places.size > 1) T("◀ swipe for saved places ▶", 7.sp, Color.White.copy(alpha = 0.6f), Modifier.padding(top = 8.dp), align = TextAlign.Center, family = androidx.compose.ui.text.font.FontFamily.Default)
+        if (Prefs.places.size > 1) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Glyph("left", 8.dp, Color.White.copy(alpha = 0.6f)); Spacer(Modifier.width(6.dp))
+            T("swipe for saved places", 7.sp, Color.White.copy(alpha = 0.6f))
+            Spacer(Modifier.width(6.dp)); Glyph("right", 8.dp, Color.White.copy(alpha = 0.6f))
+        }
+    }
     }
 }
 
@@ -176,7 +189,7 @@ private fun step(act: MainActivity, dir: Int) {
 
 @Composable
 private fun WidgetCard(act: MainActivity, slot: Slot, b: WeatherBundle, w: Dp, h: Dp, index: Int) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = pixelShape(16.dp)
     Box(Modifier.width(w).height(h).background(Color.Black, shape).padding(bottom = 4.dp).background(C.panel, shape).border(4.dp, C.edge, shape)) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
             CardHead(slot.id)
@@ -215,7 +228,7 @@ private fun move(act: MainActivity, index: Int, dir: Int) {
 
 @Composable
 private fun Tray(act: MainActivity) {
-    Column(Modifier.padding(12.dp).fillMaxWidth().border(3.dp, C.edge, RoundedCornerShape(12.dp)).padding(12.dp)) {
+    Column(Modifier.padding(12.dp).fillMaxWidth().border(3.dp, C.edge, pixelShape(12.dp)).padding(12.dp)) {
         T("+ ADD WIDGETS", 9.sp, C.orange, Modifier.padding(bottom = 12.dp))
         val hidden = Prefs.layout.filter { it.hidden }
         Chips {

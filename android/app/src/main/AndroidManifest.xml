@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- exact 10-minute widget heartbeat -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
     <uses-feature android:name="android.hardware.location" android:required="false" />
 
@@ -31,7 +34,7 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".notify.SummaryReceiver" android:exported="false" />
+        <receiver android:name=".notify.TickReceiver" android:exported="false" />
         <receiver android:name=".notify.BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -170,6 +170,51 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         return total
     }
 
+    /** Pixel glyph (see PixelGlyphs) fitted into a square of [size]. */
+    private fun glyph(name: String, x: Float, y: Float, size: Float, color: Int) {
+        val g = com.hootywhooo86.bitweather.pixel.PixelGlyphs.of(name) ?: return
+        val u = size / maxOf(g.w, g.h)
+        fp.color = color
+        for (gy in 0 until g.h) for (gx in 0 until g.w) if (g.on[gy * g.w + gx]) c.drawRect(x + gx * u, y + gy * u, x + (gx + 1) * u, y + (gy + 1) * u, fp)
+    }
+
+    private fun rnd(i: Int, salt: Int): Float {
+        val v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453
+        return (v - Math.floor(v)).toFloat()
+    }
+
+    /** Static pixel weather in the sky: snowflakes, rain streaks or night stars, snapped to a 3dp grid. */
+    private fun skyFx(b: WeatherBundle) {
+        val k = Wmo.kind(b.weather.current.code); val day = b.weather.current.isDay
+        val u = 3f
+        fun q(v: Float) = floor(v / u) * u
+        c.save(); c.clipPath(stair(3f, 3f, W - 3f, H - 3f, 3f))
+        when {
+            k == "snow" -> for (i in 0 until (W * H / 900).toInt()) {
+                fp.color = 0xB3FFFFFF.toInt(); val x = q(rnd(i, 1) * W); val y = q(rnd(i, 2) * H)
+                c.drawRect(x, y, x + u, y + u, fp)
+            }
+            k in setOf("rain", "drizzle", "showers", "thunder", "freezing") -> for (i in 0 until (W * H / 1100).toInt()) {
+                fp.color = 0x804FC3F7.toInt(); val x = q(rnd(i, 1) * W); val y = q(rnd(i, 2) * H)
+                c.drawRect(x, y, x + u, y + 3 * u, fp)
+            }
+            !day -> for (i in 0 until (W * H / 1400).toInt()) {
+                fp.color = if (i % 3 == 0) 0xE6FFFFFF.toInt() else 0x73FFFFFF; val x = q(rnd(i, 1) * W); val y = q(rnd(i, 2) * H * 0.7f)
+                c.drawRect(x, y, x + u, y + u, fp)
+            }
+        }
+        c.restore()
+    }
+
+    /** CRT scanlines over the whole widget, like the 128bit landing page. */
+    private fun scanlines() {
+        c.save(); c.clipPath(stair(0f, 0f, W, H, 4f))
+        fp.color = 0x1F000000
+        var y = 0f
+        while (y < H) { c.drawRect(0f, y, W, y + 1.5f, fp); y += 3f }
+        c.restore()
+    }
+
     private fun icon(code: Int, day: Boolean, x: Float, y: Float, size: Float) =
         PixelIcons.draw(c, PixelIcons.grid(Wmo.kind(code), day), x, y, size)
 
@@ -199,12 +244,15 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         when (kind) {
             "now" -> now(b); "hourly" -> hourly(b); "daily" -> daily(b); else -> details(b)
         }
+        scanlines()
     }
 
-    private fun header(title: String, b: WeatherBundle, color: Int = ORANGE) {
+    private fun header(title: String, b: WeatherBundle, color: Int = ORANGE, pin: Boolean = false) {
         val right = updated(b)
         val rw = width(right, 7f)
-        text(title, pad, pad, 8f, color, maxW = W - 2 * pad - rw - 6)
+        var x = pad
+        if (pin) { glyph("pin", x, pad, 8f, ORANGE); x += 12 }
+        text(title, x, pad, 8f, color, maxW = W - x - pad - rw - 6)
         text(right, W - pad, pad + 1, 7f, DIM, 1)
     }
 
@@ -214,7 +262,8 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         val alerts = Derive.allAlerts(b)
         var y = pad
         // header: place + time
-        header((if (b.place.gps) "@ " else "") + b.place.name.uppercase(), b, INK)
+        skyFx(b)
+        header(b.place.name.uppercase(), b, INK, pin = b.place.gps)
         y += 14f
         if (alerts.isNotEmpty() && H >= 100) {
             val a = alerts[0]

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -80,7 +79,7 @@ fun PxButton(
 ) {
     val bgc = if (on || primary) C.purple else C.panel
     val fg = when { on || primary -> C.bg; warn -> C.red; else -> C.ink }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = pixelShape(8.dp)
     Box(
         modifier
             .alpha(if (enabled) 1f else 0.4f)
@@ -93,7 +92,7 @@ fun PxButton(
             .padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (symbol) Sym(label, 15.sp, fg) else T(label, 8.sp, fg)
+        if (symbol) Glyph(label, 16.dp, fg) else T(label, 8.sp, fg)
     }
 }
 

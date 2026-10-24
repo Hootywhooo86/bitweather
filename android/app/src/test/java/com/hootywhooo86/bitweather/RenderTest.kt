@@ -74,7 +74,7 @@ class RenderTest {
     }
 
     @Test
-    fun sixHourSummaryPopsUpAndReschedules() {
+    fun sixHourSummaryPopsUpAndTickerRunsEvery10Min() {
         Prefs.notifyConditions = true
         Prefs.lastSummary = 0
         shadowOf(ctx as android.app.Application).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -88,11 +88,13 @@ class RenderTest {
         assertTrue("summary posted", posted.any { it.channelId == com.hootywhooo86.bitweather.notify.Notifier.CH_SUMMARY })
         // not due again until 6 hours later
         org.junit.Assert.assertFalse(com.hootywhooo86.bitweather.notify.Notifier.summaryDue())
+        // the 10-minute heartbeat that refreshes widgets and sends the forecast when due
+        com.hootywhooo86.bitweather.notify.Ticker.schedule(ctx)
         val am = ctx.getSystemService(android.app.AlarmManager::class.java)
         val next = shadowOf(am).nextScheduledAlarm
-        assertNotNull("next 6h alarm scheduled", next)
+        assertNotNull("next tick scheduled", next)
         val delta = next!!.triggerAtTime - System.currentTimeMillis()
-        assertTrue("alarm ~6h out, was $delta", delta in (6 * 3600_000L - 60_000L)..(6 * 3600_000L + 60_000L))
+        assertTrue("tick ~10 min out, was $delta", delta in (10 * 60_000L - 30_000L)..(10 * 60_000L + 30_000L))
     }
 
     @Test

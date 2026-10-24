@@ -13,10 +13,16 @@ import androidx.work.WorkerParameters
 import com.hootywhooo86.bitweather.data.Repo
 import java.util.concurrent.TimeUnit
 
-/** Background update every 15 minutes (Android's minimum): current location, weather, widgets, alerts. */
+/** Safety net every 15 minutes (WorkManager's minimum) in case the 10-minute ticker was held back. */
 class UpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result = runCatching {
-        Repo.cycle(applicationContext, force = true, foreground = false, relocate = true)
+        val ctx = applicationContext
+        com.hootywhooo86.bitweather.data.Prefs.init(ctx)
+        if (!Repo.isFresh(Repo.cached(ctx, com.hootywhooo86.bitweather.data.Prefs.home().id))) {
+            com.hootywhooo86.bitweather.notify.Ticker.tick(ctx)
+        }
+        // revive the 10-minute heartbeat if the system dropped it
+        com.hootywhooo86.bitweather.notify.Ticker.schedule(ctx)
         Result.success()
     }.getOrElse { Result.retry() }
 

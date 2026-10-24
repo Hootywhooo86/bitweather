@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -105,15 +104,16 @@ object Radar {
                             }.getOrNull()
                         }
                     }.awaitAll().filterNotNull().forEach { (dx, dy, t) -> c.drawBitmap(t, dx * 256f, dy * 256f, radarPaint) }
-                    // crop 512x512 around the place, with a pixel pin
+                    // crop 512x512 around the place, then shrink to 128x128 for true pixel-art radar
                     val cx = (px - 256).coerceIn(0, 256); val cy = (py - 256).coerceIn(0, 256)
                     val crop = Bitmap.createBitmap(bmp, cx, cy, 512, 512)
-                    val cc = Canvas(crop)
+                    val small = Bitmap.createScaledBitmap(crop, 128, 128, true)
+                    val cc = Canvas(small)
                     val pin = Paint()
-                    val ppx = (px - cx).toFloat(); val ppy = (py - cy).toFloat()
-                    pin.color = 0xFF0D0D1A.toInt(); cc.drawRect(ppx - 9, ppy - 9, ppx + 9, ppy + 9, pin)
-                    pin.color = 0xFFFF9F1C.toInt(); cc.drawRect(ppx - 6, ppy - 6, ppx + 6, ppy + 6, pin)
-                    Frame(f.getLong("time") * 1000, crop.asImageBitmap())
+                    val ppx = ((px - cx) / 4).toFloat(); val ppy = ((py - cy) / 4).toFloat()
+                    pin.color = 0xFF0D0D1A.toInt(); cc.drawRect(ppx - 3, ppy - 3, ppx + 3, ppy + 3, pin)
+                    pin.color = 0xFFFF9F1C.toInt(); cc.drawRect(ppx - 2, ppy - 2, ppx + 2, ppy + 2, pin)
+                    Frame(f.getLong("time") * 1000, small.asImageBitmap())
                 }
             }.awaitAll()
             cache = Triple(p.id, System.currentTimeMillis(), result)
@@ -136,9 +136,9 @@ fun RadarCard(place: Place) {
     LaunchedEffect(playing, frames.size) {
         while (playing && frames.isNotEmpty()) { delay(650); idx = (idx + 1) % frames.size }
     }
-    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)).background(androidx.compose.ui.graphics.Color(0xFF101024))) {
+    Box(Modifier.fillMaxSize().clip(pixelShape(8.dp)).background(androidx.compose.ui.graphics.Color(0xFF101024))) {
         val f = frames.getOrNull(idx)
-        if (f != null) Image(f.image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        if (f != null) Image(f.image, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, filterQuality = androidx.compose.ui.graphics.FilterQuality.None)
         Row(Modifier.align(Alignment.BottomStart).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (frames.isNotEmpty()) PxButton(if (playing) "❚❚" else "▶", symbol = true) { playing = !playing }
             T(f?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it.time)) } ?: status, 7.sp, C.ink,

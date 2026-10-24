@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -156,7 +155,7 @@ fun Root(act: MainActivity) {
     BackHandler(enabled = screen != Screen.Home || AppModel.editing) {
         if (AppModel.editing) AppModel.editing = false else AppModel.screen = Screen.Home
     }
-    Box(Modifier.fillMaxSize().background(C.bg).safeDrawingPadding()) {
+    Box(Modifier.fillMaxSize().background(C.bg).safeDrawingPadding().scanlines()) {
         when (screen) {
             Screen.Home -> HomeScreen(act)
             Screen.Places -> PlacesScreen(act)
@@ -168,7 +167,7 @@ fun Root(act: MainActivity) {
             LaunchedEffect(msg) { delay(3200); AppModel.toast = null }
             Box(
                 Modifier.align(Alignment.BottomCenter).padding(24.dp).widthIn(max = 420.dp)
-                    .background(C.panel).border(3.dp, C.orange, RoundedCornerShape(2.dp)).padding(12.dp),
+                    .background(C.panel).border(3.dp, C.orange, pixelShape(2.dp)).padding(12.dp),
             ) { T(msg, 8.sp, C.orange, lh = 14.sp) }
         }
     }
