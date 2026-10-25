@@ -46,6 +46,7 @@ class RenderTest {
     @Before
     fun seed() {
         ctx = ApplicationProvider.getApplicationContext()
+        com.hootywhooo86.bitweather.ui.animateFx = false
         Prefs.init(ctx)
         Prefs.firstRun = false
         Prefs.followGps = false

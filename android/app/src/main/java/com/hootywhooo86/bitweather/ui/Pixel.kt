@@ -9,7 +9,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
@@ -89,11 +88,16 @@ private fun rnd(i: Int, salt: Int): Float {
     return (v - floor(v)).toFloat()
 }
 
+/** Off in screenshot tests so the endless animation doesn't stall rendering. */
+var animateFx = true
+
 /** Animated pixel weather behind the hero: snow, rain, stars, drifting clouds, lightning. */
 @Composable
 fun PixelWeatherFx(kind: String, day: Boolean, modifier: Modifier = Modifier) {
-    val tr = rememberInfiniteTransition(label = "fx")
-    val t by tr.animateFloat(0f, 1f, infiniteRepeatable(tween(12_000, easing = LinearEasing)), label = "t")
+    val t = if (animateFx) {
+        val tr = rememberInfiniteTransition(label = "fx")
+        tr.animateFloat(0f, 1f, infiniteRepeatable(tween(12_000, easing = LinearEasing)), label = "t").value
+    } else 0.37f
     val cloud = remember {
         listOf("..##......", ".####.##..", "##########", ".########.")
     }
