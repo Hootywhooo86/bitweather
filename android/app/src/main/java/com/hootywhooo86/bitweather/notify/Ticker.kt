@@ -47,6 +47,7 @@ object Ticker {
 class TickReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         Ticker.schedule(ctx) // chain the next tick first, so a failed run never stops the heartbeat
+        com.hootywhooo86.bitweather.data.LocationWatch.start(ctx)
         val done = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try { Ticker.tick(ctx) } finally { done.finish() }
@@ -60,5 +61,6 @@ class BootReceiver : BroadcastReceiver() {
         Prefs.init(ctx)
         runCatching { UpdateWorker.schedule(ctx) }
         Ticker.schedule(ctx, 30_000L)
+        com.hootywhooo86.bitweather.data.LocationWatch.start(ctx)
     }
 }

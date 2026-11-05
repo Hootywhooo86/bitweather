@@ -35,6 +35,7 @@
         </activity>
 
         <receiver android:name=".notify.TickReceiver" android:exported="false" />
+        <receiver android:name=".data.LocationReceiver" android:exported="false" />
         <receiver android:name=".notify.BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

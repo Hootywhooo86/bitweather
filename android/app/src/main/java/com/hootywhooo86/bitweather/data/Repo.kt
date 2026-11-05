@@ -36,16 +36,29 @@ object LocationHelper {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     @SuppressLint("MissingPermission")
+    @SuppressLint("MissingPermission")
+    private fun lastKnown(lm: LocationManager): Location? = runCatching {
+        lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }
+    }.getOrNull()
+
+    /**
+     * Current position. A fix the phone already has from the last 5 minutes is used straight away
+     * (instant, and still works while the phone dozes); otherwise ask for a fresh one, capped at
+     * 20 seconds in total so the weather refresh never runs out of time.
+     */
     suspend fun current(ctx: Context): Location? {
         if (!hasPermission(ctx)) return null
         val lm = ctx.getSystemService(LocationManager::class.java) ?: return null
+        val recent = lastKnown(lm)
+        if (recent != null && System.currentTimeMillis() - recent.time < 5 * 60_000L) return recent
+        val deadline = System.currentTimeMillis() + 20_000L
         val providers = buildList {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(LocationManager.FUSED_PROVIDER)
             add(LocationManager.NETWORK_PROVIDER); add(LocationManager.GPS_PROVIDER)
         }.filter { runCatching { lm.isProviderEnabled(it) }.getOrDefault(false) }
         for (p in providers) {
             val loc = runCatching {
-                withTimeoutOrNull(15_000) {
+                withTimeoutOrNull(minOf(10_000L, deadline - System.currentTimeMillis()).coerceAtLeast(1L)) {
                     suspendCancellableCoroutine<Location?> { cont ->
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             val cs = CancellationSignal()
@@ -66,10 +79,9 @@ object LocationHelper {
                 }
             }.getOrNull()
             if (loc != null) return loc
+            if (System.currentTimeMillis() >= deadline) break
         }
-        return runCatching {
-            lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }
-        }.getOrNull()
+        return lastKnown(lm)
     }
 }
 
@@ -120,6 +132,11 @@ object Repo {
     /** Refresh the GPS place. Returns the place, or null if location isn't available. */
     suspend fun locate(ctx: Context, select: Boolean): Place? = withContext(Dispatchers.IO) {
         val loc = LocationHelper.current(ctx) ?: return@withContext null
+        apply(ctx, loc, select).first
+    }
+
+    /** Store a position as the GPS place. Returns the place and whether it moved enough to need new weather. */
+    suspend fun apply(ctx: Context, loc: Location, select: Boolean): Pair<Place, Boolean> = withContext(Dispatchers.IO) {
         val lat = Math.round(loc.latitude * 10000) / 10000.0
         val lon = Math.round(loc.longitude * 10000) / 10000.0
         val prev = Prefs.places.firstOrNull { it.gps }
@@ -139,7 +156,18 @@ object Repo {
             Prefs.save()
         }
         if (moved) drop(ctx, "gps")
-        place
+        place to moved
+    }
+
+    /** A location update arrived from the system (you moved): refresh weather and widgets for the new spot. */
+    suspend fun onMoved(ctx: Context, loc: Location) = cycleLock.withLock {
+        Prefs.init(ctx)
+        if (!Prefs.followGps) return@withLock
+        val (place, moved) = apply(ctx, loc, select = false)
+        if (!moved) return@withLock
+        val hb = runCatching { fetch(ctx, place, force = true) }.getOrNull()
+        Widgets.updateAll(ctx)
+        if (hb != null && !hb.stale) Notifier.process(ctx, hb)
     }
 
     /**
@@ -152,7 +180,7 @@ object Repo {
         // (background needs "Allow all the time"; otherwise the last synced spot is reused).
         val canLocate = foreground || LocationHelper.hasBackground(ctx)
         if (canLocate && ((relocate && Prefs.followGps) || Prefs.firstRun)) {
-            runCatching { locate(ctx, select = foreground && (Prefs.activeId == "gps" || Prefs.firstRun)) }
+            runCatching { withTimeoutOrNull(22_000) { locate(ctx, select = foreground && (Prefs.activeId == "gps" || Prefs.firstRun)) } }
         }
         val home = Prefs.home()
         val hb = runCatching { fetch(ctx, home, force) }.getOrNull()

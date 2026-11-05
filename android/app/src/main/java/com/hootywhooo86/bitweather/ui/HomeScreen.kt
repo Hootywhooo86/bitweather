@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hootywhooo86.bitweather.data.Fmt
+import com.hootywhooo86.bitweather.data.LocationHelper
 import com.hootywhooo86.bitweather.data.Place
 import com.hootywhooo86.bitweather.data.Prefs
 import com.hootywhooo86.bitweather.data.Repo
@@ -57,6 +58,7 @@ fun HomeScreen(act: MainActivity) {
         LazyColumn(Modifier.fillMaxSize()) {
             item { TopBar(act, place, b) }
             item { Hero(act, place, b) }
+            if (Prefs.followGps && !(LocationHelper.hasPermission(ctx) && LocationHelper.hasBackground(ctx))) item { FollowBanner(act) }
             if (b == null) {
                 item { T(if (AppModel.loading) "Reading the skies…" else "No weather yet — pull ⟳ to retry", 9.sp, C.dim, Modifier.padding(24.dp)) }
             } else {
@@ -73,6 +75,25 @@ fun HomeScreen(act: MainActivity) {
             if (AppModel.editing) item { Tray(act) }
             item { Spacer(Modifier.height(40.dp)) }
         }
+    }
+}
+
+/** Shown until "Allow all the time" is on — without it widgets can't follow you while the app is closed. */
+@Composable
+private fun FollowBanner(act: MainActivity) {
+    val shape = pixelShape(12.dp)
+    Column(
+        Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp).fillMaxWidth()
+            .background(C.panel, shape).border(4.dp, C.orange, shape).padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Glyph("pin", 12.dp, C.orange); Spacer(Modifier.width(8.dp))
+            T("WIDGETS CAN'T FOLLOW YOU YET", 8.sp, C.orange)
+        }
+        T("Allow location \"all the time\" so your widgets update to where you are every 10 minutes, without opening the app.",
+            8.sp, C.ink, Modifier.padding(top = 8.dp), lh = 14.sp)
+        Spacer(Modifier.height(10.dp))
+        PxButton("ALLOW ALL THE TIME", primary = true) { act.requestBackgroundLocation() }
     }
 }
 

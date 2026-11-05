@@ -70,6 +70,14 @@ class MainActivity : ComponentActivity() {
     private val singlePerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         AppModel.bump(); refresh(force = true)
     }
+    private val backgroundPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (!ok && !LocationHelper.hasBackground(this)) {
+            // Android only offers "Allow all the time" on the app's own settings page
+            AppModel.say("Tap Permissions → Location → Allow all the time")
+            openAppSettings()
+        }
+        AppModel.bump(); refresh(force = true)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -104,7 +112,7 @@ class MainActivity : ComponentActivity() {
     /** "Allow all the time" so widgets follow you every 15 minutes while the app is closed. */
     fun requestBackgroundLocation() {
         if (!LocationHelper.hasPermission(this)) { requestLocation(); return }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) singlePerm.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) backgroundPerm.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
     }
 
     /** Some phones pause background apps; this opens the screen to let Bitweather run. */
@@ -134,6 +142,8 @@ class MainActivity : ComponentActivity() {
                 if (r == null && Repo.cached(this@MainActivity, Prefs.active().id) == null) AppModel.say("Could not load weather — check your connection")
                 else if (r?.stale == true && force) AppModel.say("Offline — showing saved forecast")
             } finally {
+                // permissions may have changed in system settings: (re)start following your moves
+                com.hootywhooo86.bitweather.data.LocationWatch.start(this@MainActivity)
                 AppModel.loading = false
                 AppModel.bump()
             }

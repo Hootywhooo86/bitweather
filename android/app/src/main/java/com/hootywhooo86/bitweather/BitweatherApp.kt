@@ -13,5 +13,6 @@ class BitweatherApp : Application() {
         Notifier.channels(this)
         runCatching { UpdateWorker.schedule(this) }
         Ticker.schedule(this)
+        com.hootywhooo86.bitweather.data.LocationWatch.start(this)
     }
 }
