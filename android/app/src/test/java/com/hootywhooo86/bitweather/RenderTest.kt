@@ -41,7 +41,19 @@ class RenderTest {
     private lateinit var bundle: WeatherBundle
     private val out = File("build/previews").apply { mkdirs() }
 
-    private fun res(name: String) = javaClass.classLoader!!.getResource(name).readText()
+    /**
+     * Fixture JSON with every date moved forward so the forecast's "now" is today: the tests must not
+     * go stale as the saved forecast ages.
+     */
+    private fun res(name: String): String {
+        val raw = javaClass.classLoader!!.getResource(name).readText()
+        val o = org.json.JSONObject(raw)
+        val off = o.optInt("utc_offset_seconds")
+        val fixtureDay = java.time.LocalDate.parse(o.getJSONObject("current").getString("time").take(10))
+        val today = java.time.Instant.ofEpochMilli(System.currentTimeMillis() + off * 1000L).atZone(java.time.ZoneOffset.UTC).toLocalDate()
+        val shift = java.time.temporal.ChronoUnit.DAYS.between(fixtureDay, today)
+        return Regex("\\d{4}-\\d{2}-\\d{2}").replace(raw) { java.time.LocalDate.parse(it.value).plusDays(shift).toString() }
+    }
 
     @Before
     fun seed() {
