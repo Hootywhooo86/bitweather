@@ -36,7 +36,6 @@ object LocationHelper {
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     @SuppressLint("MissingPermission")
-    @SuppressLint("MissingPermission")
     private fun lastKnown(lm: LocationManager): Location? = runCatching {
         lm.getProviders(true).mapNotNull { lm.getLastKnownLocation(it) }.maxByOrNull { it.time }
     }.getOrNull()
