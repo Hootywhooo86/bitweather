@@ -182,9 +182,9 @@ fun RollingTemp(celsius: Double, size: androidx.compose.ui.unit.TextUnit, color:
 fun PixelWipe(key: Any, modifier: Modifier = Modifier) {
     if (!animateFx) return
     val p = remember { androidx.compose.animation.core.Animatable(0f) }
-    var first by remember { androidx.compose.runtime.mutableStateOf(true) }
+    val first = remember { booleanArrayOf(true) } // no wipe when the app first opens
     androidx.compose.runtime.LaunchedEffect(key) {
-        if (first) { first = false; return@LaunchedEffect }
+        if (first[0]) { first[0] = false; return@LaunchedEffect }
         p.snapTo(1f); p.animateTo(0f, tween(320, easing = LinearEasing))
     }
     if (p.value <= 0f) return
