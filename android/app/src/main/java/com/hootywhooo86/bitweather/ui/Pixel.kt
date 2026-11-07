@@ -139,3 +139,80 @@ fun PixelWeatherFx(kind: String, day: Boolean, modifier: Modifier = Modifier) {
         if (kind == "thunder" && (t * 9) % 1f < 0.035f) drawRect(Color.White.copy(alpha = 0.28f))
     }
 }
+
+// ---------------------------------------------------------------- animation helpers
+
+/** 0→1 when first shown (and again when [key] changes), so bars, gauges and arcs sweep in. Instant in tests. */
+@Composable
+fun rememberReveal(key: Any? = Unit, millis: Int = 700): Float {
+    if (!animateFx) return 1f
+    val a = remember(key) { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(key) { a.animateTo(1f, tween(millis, easing = LinearEasing)) }
+    // stepped, so it moves in chunky pixel increments rather than smoothly
+    return floor(a.value * 12f) / 12f
+}
+
+/** Arcade-style number that ticks up/down to [target] one step at a time. */
+@Composable
+fun rollingInt(target: Int): Int {
+    if (!animateFx) return target
+    val shown = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(target) {
+        val steps = kotlin.math.abs(target - shown.intValue).coerceAtLeast(1)
+        val pause = (600L / steps).coerceIn(15L, 70L)
+        while (shown.intValue != target) {
+            shown.intValue += if (target > shown.intValue) 1 else -1
+            kotlinx.coroutines.delay(pause)
+        }
+    }
+    return shown.intValue
+}
+
+/** Big temperature that rolls up like a score counter. */
+@Composable
+fun RollingTemp(celsius: Double, size: androidx.compose.ui.unit.TextUnit, color: Color = Color.White, modifier: Modifier = Modifier) {
+    if (celsius.isNaN()) { BigTemp("--°", size, color, modifier); return }
+    val unit = com.hootywhooo86.bitweather.data.Fmt.t(celsius).removeSuffix("°").toIntOrNull()
+    if (unit == null) { BigTemp(com.hootywhooo86.bitweather.data.Fmt.t(celsius), size, color, modifier); return }
+    BigTemp("${rollingInt(unit)}°", size, color, modifier)
+}
+
+/** Screen change / place swipe: the new screen dissolves in block by block. */
+@Composable
+fun PixelWipe(key: Any, modifier: Modifier = Modifier) {
+    if (!animateFx) return
+    val p = remember { androidx.compose.animation.core.Animatable(0f) }
+    var first by remember { androidx.compose.runtime.mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(key) {
+        if (first) { first = false; return@LaunchedEffect }
+        p.snapTo(1f); p.animateTo(0f, tween(320, easing = LinearEasing))
+    }
+    if (p.value <= 0f) return
+    Canvas(modifier) {
+        val b = 18.dp.toPx()
+        val cols = (size.width / b).toInt() + 1; val rows = (size.height / b).toInt() + 1
+        for (y in 0 until rows) for (x in 0 until cols) {
+            if (rnd(x * 131 + y, 11) < p.value) drawRect(C.bg, Offset(x * b, y * b), Size(b + 1, b + 1))
+        }
+    }
+}
+
+/** Retro loading bar: a block bouncing along while weather refreshes. */
+@Composable
+fun PixelLoadingBar(modifier: Modifier = Modifier) {
+    val n = 24
+    val frame = com.hootywhooo86.bitweather.ui.AppModel.frame
+    val pos = frame % (2 * n - 2)
+    val head = if (pos < n) pos else 2 * n - 2 - pos
+    androidx.compose.foundation.layout.Row(modifier, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
+        for (i in 0 until n) {
+            val d = kotlin.math.abs(i - head)
+            androidx.compose.foundation.layout.Box(
+                Modifier.weight(1f).size(6.dp)
+                    .then(Modifier.drawWithContent {
+                        drawRect(if (d == 0) C.orange else if (d == 1) C.purple else C.edge)
+                    }),
+            )
+        }
+    }
+}

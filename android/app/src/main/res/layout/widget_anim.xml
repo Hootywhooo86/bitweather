@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Animated widget: the launcher flips through 4 pre-drawn pixel frames. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <ViewFlipper
+        android:id="@+id/flipper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true"
+        android:flipInterval="450">
+        <ImageView android:id="@+id/f0" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:contentDescription="@string/app_name" android:scaleType="fitXY" />
+        <ImageView android:id="@+id/f1" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:contentDescription="@string/app_name" android:scaleType="fitXY" />
+        <ImageView android:id="@+id/f2" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:contentDescription="@string/app_name" android:scaleType="fitXY" />
+        <ImageView android:id="@+id/f3" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:contentDescription="@string/app_name" android:scaleType="fitXY" />
+    </ViewFlipper>
+</FrameLayout>

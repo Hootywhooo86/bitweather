@@ -54,6 +54,10 @@ object AppModel {
     var toast by mutableStateOf<String?>(null)
     var screen by mutableStateOf<Screen>(Screen.Home)
     var editing by mutableStateOf(false)
+    /** Animation frame (ticks ~8x a second) shared by every animated pixel sprite. */
+    var frame by mutableIntStateOf(0)
+    /** Bumped when you swipe to another place, to play the pixel wipe. */
+    var wipe by mutableIntStateOf(0)
     fun bump() { tick++ }
     fun say(s: String) { toast = s }
 }
@@ -172,6 +176,10 @@ fun Root(act: MainActivity) {
             Screen.Settings -> SettingsScreen(act)
             is Screen.Day -> DayScreen(screen.index)
             is Screen.Alerts -> AlertsScreen(screen.index)
+        }
+        PixelWipe(screen.javaClass.simpleName + (screen as? Screen.Day)?.index + AppModel.wipe, Modifier.fillMaxSize())
+        if (animateFx) LaunchedEffect(Unit) {
+            while (true) { delay(125); AppModel.frame++ }
         }
         AppModel.toast?.let { msg ->
             LaunchedEffect(msg) { delay(3200); AppModel.toast = null }

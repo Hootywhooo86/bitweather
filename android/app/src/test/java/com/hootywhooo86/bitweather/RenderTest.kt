@@ -111,6 +111,37 @@ class RenderTest {
     }
 
     @Test
+    fun animationFrames() {
+        // every icon kind, day and night, all 4 frames
+        val kinds = listOf("clear", "mostly", "partly", "cloudy", "fog", "drizzle", "rain", "freezing", "showers", "snow", "thunder")
+        val cell = 64; val gap = 8
+        val sheet = Bitmap.createBitmap(4 * 2 * (cell + gap) + gap, kinds.size * (cell + gap) + gap, Bitmap.Config.ARGB_8888)
+        val c = Canvas(sheet); c.drawColor(Color.rgb(0x1a, 0x1a, 0x2e))
+        kinds.forEachIndexed { r, k ->
+            for (night in 0..1) for (f in 0 until 4) {
+                val g = com.hootywhooo86.bitweather.pixel.PixelIcons.grid(k, night == 0, f)
+                com.hootywhooo86.bitweather.pixel.PixelIcons.draw(c, g, (gap + (night * 4 + f) * (cell + gap)).toFloat(), (gap + r * (cell + gap)).toFloat(), cell.toFloat())
+            }
+        }
+        File(out, "icon_frames.png").outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // the Now widget's 4 frames side by side
+        val scale = 2f; val w = 290; val h = 200
+        val strip = Bitmap.createBitmap((4 * w * scale).toInt() + 3 * 12, (h * scale).toInt(), Bitmap.Config.ARGB_8888)
+        val sc = Canvas(strip)
+        for (f in 0 until 4) {
+            val bmp = Bitmap.createBitmap((w * scale).toInt(), (h * scale).toInt(), Bitmap.Config.ARGB_8888)
+            val cc = Canvas(bmp); cc.scale(scale, scale)
+            WidgetPainter(ctx, cc, w.toFloat(), h.toFloat(), f).draw("now", bundle)
+            sc.drawBitmap(bmp, f * (w * scale + 12), 0f, Paint())
+        }
+        File(out, "widget_now_frames.png").outputStream().use { strip.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // different frames must actually differ (otherwise nothing animates)
+        val a = com.hootywhooo86.bitweather.pixel.PixelIcons.grid("rain", true, 0)
+        val b = com.hootywhooo86.bitweather.pixel.PixelIcons.grid("rain", true, 1)
+        assertTrue(!a.contentEquals(b))
+    }
+
+    @Test
     fun widgets() {
         val sizes = listOf(
             "now" to (250 to 110), "now" to (320 to 200), "now" to (330 to 400), "now" to (290 to 280), "now" to (130 to 70),

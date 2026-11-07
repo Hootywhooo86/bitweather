@@ -78,21 +78,37 @@ object PixelIcons {
         for ((y, a, b) in listOf(Triple(10, 1, 14), Triple(12, 3, 12), Triple(14, 2, 15))) for (x in a..b) if ((x + y) % 5 != 0) add(x to y)
     })
 
-    private fun layers(kind: String, day: Boolean): List<Layer> {
-        fun sky(cx: Double, cy: Double, r: Double, ray: Double) = if (day) sun(cx, cy, r, ray) else listOf(moon(cx, cy, r + 0.6))
+    /** Animation frames per icon: a 4-step loop, like an old game sprite. */
+    const val FRAMES = 4
+
+    /** Precipitation falls: rows 11..15 cycle downward by [dy]. */
+    private fun fall(src: Set<Int>, dy: Int): Set<Int> = src.map { k ->
+        val x = k % 16; val y = k / 16
+        if (y < 10) k else key(x, 10 + ((y - 10 + dy) % 6))
+    }.toSet()
+
+    private fun layers(kind: String, day: Boolean, f: Int): List<Layer> {
+        // sun rays pulse; clouds bob a little; rain and snow fall; stars twinkle; lightning flickers
+        val pulse = if (f % 2 == 0) 0.0 else -0.7
+        val bob = listOf(0.0, 0.5, 1.0, 0.5)[f]
+        fun sky(cx: Double, cy: Double, r: Double, ray: Double) = if (day) sun(cx, cy, r, ray + pulse) else listOf(moon(cx, cy, r + 0.6))
+        val twinkle = if (day) emptyList() else listOf(
+            color(pts(listOf(listOf(13 to 2, 2 to 13), listOf(14 to 5, 12 to 13), listOf(13 to 2, 3 to 12), listOf(11 to 1, 14 to 9))[f]), SNOW),
+        )
         val up = -3.0
         return when (kind) {
-            "mostly" -> sky(7.0, 7.0, 3.8, 1.8) + cloud(5.0, 6.5, 0.72)
-            "partly" -> sky(6.0, 6.0, 3.4, 1.6) + cloud(1.5, 3.0, 1.0)
-            "cloudy" -> listOf(cloud(-1.5, -2.5, 0.85, true), cloud(1.0, 2.0, 1.0))
-            "fog" -> listOf(cloud(0.0, -4.0, 1.0), color(FOG_PTS, FOG))
-            "drizzle" -> listOf(cloud(0.0, up, 1.0), color(DRIZZLE_PTS, RAIN))
-            "rain" -> listOf(cloud(0.0, up, 1.0, true), color(RAIN_PTS, RAIN))
-            "freezing" -> listOf(cloud(0.0, up, 1.0, true), color(DRIZZLE_PTS, ICE), color(pts(listOf(12 to 13, 11 to 14, 12 to 15, 13 to 14)), SNOW))
-            "showers" -> sky(4.5, 4.5, 3.0, 1.4) + listOf(cloud(1.0, -1.5, 0.9), color(RAIN_PTS.filter { it % 16 > 4 }.toSet(), RAIN))
-            "snow" -> listOf(cloud(0.0, up, 1.0), color(SNOW_PTS, SNOW))
-            "thunder" -> listOf(cloud(0.0, up, 1.0, true), color(pts(listOf(3 to 11, 2 to 12, 12 to 11, 11 to 12, 13 to 14, 12 to 15)), RAIN), color(BOLT_PTS, BOLT))
-            else -> sky(8.0, 8.0, 4.4, 2.2)
+            "mostly" -> sky(7.0, 7.0, 3.8, 1.8) + cloud(5.0 + bob, 6.5, 0.72) + twinkle
+            "partly" -> sky(6.0, 6.0, 3.4, 1.6) + cloud(1.5 + bob, 3.0, 1.0)
+            "cloudy" -> listOf(cloud(-1.5 + bob, -2.5, 0.85, true), cloud(1.0, 2.0, 1.0))
+            "fog" -> listOf(cloud(0.0, -4.0, 1.0), color(FOG_PTS.map { k -> key(((k % 16) + f) % 16, k / 16) }.toSet(), FOG))
+            "drizzle" -> listOf(cloud(0.0, up, 1.0), color(fall(DRIZZLE_PTS, f), RAIN))
+            "rain" -> listOf(cloud(0.0, up, 1.0, true), color(fall(RAIN_PTS, f), RAIN))
+            "freezing" -> listOf(cloud(0.0, up, 1.0, true), color(fall(DRIZZLE_PTS, f), ICE), color(pts(listOf(12 to 13, 11 to 14, 12 to 15, 13 to 14)), SNOW))
+            "showers" -> sky(4.5, 4.5, 3.0, 1.4) + listOf(cloud(1.0, -1.5, 0.9), color(fall(RAIN_PTS.filter { it % 16 > 4 }.toSet(), f), RAIN))
+            "snow" -> listOf(cloud(0.0, up, 1.0), color(fall(SNOW_PTS, f / 2), SNOW))
+            "thunder" -> listOf(cloud(0.0, up, 1.0, true), color(fall(pts(listOf(3 to 11, 2 to 12, 12 to 11, 11 to 12, 13 to 14, 12 to 15)), f), RAIN)) +
+                (if (f < 2) listOf(color(BOLT_PTS, BOLT)) else emptyList())
+            else -> sky(8.0, 8.0, 4.4, 2.2) + twinkle
         }
     }
 
@@ -115,7 +131,8 @@ object PixelIcons {
     private val cache = HashMap<String, IntArray>()
 
     @Synchronized
-    fun grid(kind: String, day: Boolean): IntArray = cache.getOrPut(kind + day) { paint(layers(kind, day)) }
+    fun grid(kind: String, day: Boolean, frame: Int = 0): IntArray =
+        cache.getOrPut("$kind$day$frame") { paint(layers(kind, day, ((frame % FRAMES) + FRAMES) % FRAMES)) }
 
     fun moonGrid(phase: Double): IntArray {
         val px = disc(8.0, 8.0, 6.0)

@@ -62,7 +62,8 @@ fun Sym(s: String, size: TextUnit = 14.sp, color: Color = C.ink, modifier: Modif
 
 @Composable
 fun PixelIcon(code: Int, day: Boolean, size: Dp, modifier: Modifier = Modifier) {
-    val bmp = remember(code, day) { PixelIcons.raw(PixelIcons.grid(Wmo.kind(code), day)).asImageBitmap() }
+    val f = (AppModel.frame / 2) % PixelIcons.FRAMES
+    val bmp = remember(code, day, f) { PixelIcons.raw(PixelIcons.grid(Wmo.kind(code), day, f)).asImageBitmap() }
     Image(bmp, null, modifier.size(size), filterQuality = FilterQuality.None)
 }
 
@@ -112,7 +113,11 @@ fun Section(s: String) = T(s, 8.sp, C.orange, Modifier.padding(top = 20.dp, bott
 fun Note(s: String) = T(s, 7.sp, C.dim, Modifier.padding(top = 8.dp), lh = 14.sp)
 
 @Composable
-fun SegBar(n: Int, max: Int, colors: List<Color>, mark: Int? = null, height: Dp = 10.dp) {
+fun SegBar(n0: Int, max: Int, colors: List<Color>, mark0: Int? = null, height: Dp = 10.dp) {
+    // blocks fill in (and the marker walks to its spot) when the card appears
+    val p = rememberReveal(Pair(n0, mark0))
+    val n = kotlin.math.round(n0 * p).toInt()
+    val mark = mark0?.let { kotlin.math.round(it * p).toInt() }
     Row(Modifier.fillMaxWidth().height(height).padding(vertical = 0.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for (i in 0 until max) {
             val col = colors[minOf(i, colors.size - 1)]

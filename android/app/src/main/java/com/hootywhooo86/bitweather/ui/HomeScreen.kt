@@ -22,6 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -57,6 +60,12 @@ fun HomeScreen(act: MainActivity) {
         val rows = pack(visible)
         LazyColumn(Modifier.fillMaxSize()) {
             item { TopBar(act, place, b) }
+            item {
+                // retro loading bar while refreshing; the space is kept so the screen doesn't jump
+                Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(10.dp)) {
+                    if (AppModel.loading) PixelLoadingBar(Modifier.fillMaxWidth())
+                }
+            }
             item { Hero(act, place, b) }
             if (Prefs.followGps && !(LocationHelper.hasPermission(ctx) && LocationHelper.hasBackground(ctx))) item { FollowBanner(act) }
             if (b == null) {
@@ -67,7 +76,7 @@ fun HomeScreen(act: MainActivity) {
                         row.forEach { slot ->
                             val w = if (slot.size == "S") cell else cell * 2 + gap
                             val h = when (slot.size) { "T" -> cell / 2; "L" -> cell * 2 + gap; else -> cell }
-                            WidgetCard(act, slot, b, w, h, visible.indexOf(slot))
+                            WidgetCard(act, slot, b, w, h, visible.indexOf(slot), b.fetchedAt)
                         }
                     }
                 }
@@ -175,7 +184,7 @@ private fun Hero(act: MainActivity, place: Place, b: WeatherBundle?) {
         } else {
             val w = b.weather; val c = w.current; val d = w.d0()
             PixelIcon(c.code, c.isDay, 96.dp)
-            BigTemp(Fmt.t(c.temp), 42.sp, Color.White, Modifier.padding(top = 4.dp))
+            RollingTemp(c.temp, 42.sp, Color.White, Modifier.padding(top = 4.dp))
             T(Wmo.name(c.code), 11.sp, Color.White, Modifier.padding(top = 12.dp))
             T("Feels like ${Fmt.t(c.feels)}", 9.sp, Color.White.copy(alpha = 0.85f), Modifier.padding(top = 10.dp))
             T("High ${Fmt.t(w.daily.tmax.at(d))} · Low ${Fmt.t(w.daily.tmin.at(d))}", 9.sp, Color.White.copy(alpha = 0.85f), Modifier.padding(top = 8.dp))
@@ -205,13 +214,24 @@ private fun step(act: MainActivity, dir: Int) {
     if (n < 2) return
     val i = Prefs.places.indexOfFirst { it.id == Prefs.activeId }
     Prefs.activeId = Prefs.places[(i + dir + n) % n].id
+    AppModel.wipe++
     act.changed(refetch = true)
 }
 
 @Composable
-private fun WidgetCard(act: MainActivity, slot: Slot, b: WeatherBundle, w: Dp, h: Dp, index: Int) {
+private fun WidgetCard(act: MainActivity, slot: Slot, b: WeatherBundle, w: Dp, h: Dp, index: Int, refreshKey: Long) {
     val shape = pixelShape(16.dp)
-    Box(Modifier.width(w).height(h).background(Color.Black, shape).padding(bottom = 4.dp).background(C.panel, shape).border(4.dp, C.edge, shape)) {
+    // cards drop in one after another (on open and after each refresh), in chunky steps
+    val shown = if (!animateFx) 1f else {
+        val a = remember(refreshKey) { androidx.compose.animation.core.Animatable(0f) }
+        LaunchedEffect(refreshKey) {
+            kotlinx.coroutines.delay((index * 45L).coerceAtMost(500L))
+            a.animateTo(1f, androidx.compose.animation.core.tween(240))
+        }
+        kotlin.math.floor(a.value * 4f) / 4f
+    }
+    Box(Modifier.graphicsLayer { alpha = shown; translationY = (1f - shown) * 24.dp.toPx() }
+        .width(w).height(h).background(Color.Black, shape).padding(bottom = 4.dp).background(C.panel, shape).border(4.dp, C.edge, shape)) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
             CardHead(slot.id)
             Box(Modifier.weight(1f).fillMaxWidth()) { CardBody(act, slot.id, slot.size, b) }

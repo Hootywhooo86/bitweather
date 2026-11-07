@@ -219,6 +219,14 @@ fun SettingsScreen(act: MainActivity) {
         if (allowed) Chips { PxButton("SEND TEST") { Notifier.test(ctx, Repo.cached(ctx, Prefs.home().id)) } }
         Note("Alerts arrive as soon as they're issued: official warnings (Environment Canada / US NWS) plus your custom alerts below, each once. The forecast summary comes every 6 hours. Nothing stays pinned in your notifications.")
 
+        Section("ANIMATION")
+        Chips {
+            PxButton("Animated widgets: ${if (Prefs.animateWidgets) "ON" else "OFF"}", on = Prefs.animateWidgets) {
+                Prefs.animateWidgets = !Prefs.animateWidgets; act.changed()
+            }
+        }
+        Note("Home-screen widgets flip through 4 pixel frames (falling snow and rain, twinkling stars, moving icons, blinking warnings). Turn off for still widgets.")
+
         Section("CUSTOM ALERTS (NEXT 48 H, METRIC)")
         val t = Prefs.thresholds
         Threshold("Temp drops to", "°C", t.cold) { t.cold = it; act.changed() }

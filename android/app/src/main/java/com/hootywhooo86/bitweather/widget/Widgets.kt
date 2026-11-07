@@ -72,15 +72,29 @@ object Widgets {
         val (dw, dh) = defaults[kind]!!
         val wDp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: dw
         val hDp = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: dh
-        var scale = ctx.resources.displayMetrics.density
-        while (wDp * scale * hDp * scale > 1_300_000) scale *= 0.85f
-        val bmp = Bitmap.createBitmap(max(1, (wDp * scale).roundToInt()), max(1, (hDp * scale).roundToInt()), Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        c.scale(scale, scale)
+        // Animated widgets: the launcher flips through pre-drawn frames (widgets can't run real animations).
+        val frames = if (Prefs.animateWidgets && kind != "details") PixelIcons.FRAMES else 1
+        val dm = ctx.resources.displayMetrics
+        // Android caps a widget update at 1.5 screens of bitmap memory; share it between the frames
+        val budget = minOf(1_300_000f, dm.widthPixels * dm.heightPixels * 1.5f * 0.8f / frames)
+        var scale = dm.density
+        while (wDp * scale * hDp * scale > budget) scale *= 0.9f
         val b = Repo.cached(ctx, Prefs.home().id)
-        runCatching { WidgetPainter(ctx, c, wDp.toFloat(), hDp.toFloat()).draw(kind, b) }
-        val rv = RemoteViews(ctx.packageName, R.layout.widget_image)
-        rv.setImageViewBitmap(R.id.img, bmp)
+        val bmps = (0 until frames).map { f ->
+            val bmp = Bitmap.createBitmap(max(1, (wDp * scale).roundToInt()), max(1, (hDp * scale).roundToInt()), Bitmap.Config.ARGB_8888)
+            val c = Canvas(bmp)
+            c.scale(scale, scale)
+            runCatching { WidgetPainter(ctx, c, wDp.toFloat(), hDp.toFloat(), f).draw(kind, b) }
+            bmp
+        }
+        val rv: RemoteViews
+        if (frames == 1) {
+            rv = RemoteViews(ctx.packageName, R.layout.widget_image)
+            rv.setImageViewBitmap(R.id.img, bmps[0])
+        } else {
+            rv = RemoteViews(ctx.packageName, R.layout.widget_anim)
+            listOf(R.id.f0, R.id.f1, R.id.f2, R.id.f3).forEachIndexed { i, v -> rv.setImageViewBitmap(v, bmps[i]) }
+        }
         val pi = PendingIntent.getActivity(
             ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -91,7 +105,7 @@ object Widgets {
 }
 
 /** Draws the pixel-style widgets in dp coordinates. */
-class WidgetPainter(private val ctx: Context, private val c: Canvas, private val W: Float, private val H: Float) {
+class WidgetPainter(private val ctx: Context, private val c: Canvas, private val W: Float, private val H: Float, private val frame: Int = 0) {
     companion object {
         const val BG = 0xFF1A1A2E.toInt(); const val EDGE = 0xFF3D3D5C.toInt(); const val PANEL2 = 0xFF24243C.toInt()
         const val INK = 0xFFF5F5F5.toInt(); const val DIM = 0xFF9E9E9E.toInt(); const val ORANGE = 0xFFFF9F1C.toInt()
@@ -189,16 +203,27 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         val u = 3f
         fun q(v: Float) = floor(v / u) * u
         c.save(); c.clipPath(stair(3f, 3f, W - 3f, H - 3f, 3f))
+        // Particles fall within repeating bands so the 4-frame loop is seamless (4 steps = one band).
+        fun fall(count: Int, step: Float, w: Float, h: Float, color: Int) {
+            val band = 4 * step
+            var t = 0
+            while (t * band < H) {
+                for (i in 0 until count) {
+                    fp.color = color
+                    val x = q(rnd(i, 1 + t * 7) * W)
+                    val y = t * band + q((rnd(i, 2 + t * 7) * band + frame * step) % band)
+                    c.drawRect(x, y, x + w, y + h, fp)
+                }
+                t++
+            }
+        }
         when {
-            k == "snow" -> for (i in 0 until (W * H / 900).toInt()) {
-                fp.color = 0xB3FFFFFF.toInt(); val x = q(rnd(i, 1) * W); val y = q(rnd(i, 2) * H)
-                c.drawRect(x, y, x + u, y + u, fp)
-            }
-            k in setOf("rain", "drizzle", "showers", "thunder", "freezing") -> for (i in 0 until (W * H / 1100).toInt()) {
-                fp.color = 0x804FC3F7.toInt(); val x = q(rnd(i, 1) * W); val y = q(rnd(i, 2) * H)
-                c.drawRect(x, y, x + u, y + 3 * u, fp)
-            }
+            k == "snow" -> fall((W * 6 * u / 900).toInt().coerceAtLeast(2), 2 * u, u, u, 0xB3FFFFFF.toInt())
+            k in setOf("rain", "drizzle", "showers", "thunder", "freezing") ->
+                fall((W * 12 * u / 1100).toInt().coerceAtLeast(2), 4 * u, u, 3 * u, 0x804FC3F7.toInt())
             !day -> for (i in 0 until (W * H / 1400).toInt()) {
+                // stars twinkle: each frame a slightly different set is lit
+                if (rnd(i, 20 + frame) < 0.3f) continue
                 fp.color = if (i % 3 == 0) 0xE6FFFFFF.toInt() else 0x73FFFFFF; val x = q(rnd(i, 1) * W); val y = q(rnd(i, 2) * H * 0.7f)
                 c.drawRect(x, y, x + u, y + u, fp)
             }
@@ -216,7 +241,7 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
     }
 
     private fun icon(code: Int, day: Boolean, x: Float, y: Float, size: Float) =
-        PixelIcons.draw(c, PixelIcons.grid(Wmo.kind(code), day), x, y, size)
+        PixelIcons.draw(c, PixelIcons.grid(Wmo.kind(code), day, frame), x, y, size)
 
     private fun skyFor(b: WeatherBundle): IntArray {
         val cur = b.weather.current
@@ -268,7 +293,9 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         if (alerts.isNotEmpty() && H >= 100) {
             val a = alerts[0]
             val col = when (a.type) { "warning" -> RED; "watch" -> ORANGE; "custom" -> PURPLE; else -> YELLOW }
-            box(pad, y, W - pad, y + 14, 0xCC0D0D1A.toInt()); box(pad, y, pad + 4, y + 14, col)
+            // warnings and watches blink (every other frame dims the stripe)
+            val blink = (a.type == "warning" || a.type == "watch") && frame % 2 == 1
+            box(pad, y, W - pad, y + 14, 0xCC0D0D1A.toInt()); box(pad, y, pad + 4, y + 14, if (blink) (col and 0x00FFFFFF) or 0x4D000000 else col)
             text("! " + a.title + if (alerts.size > 1) " +${alerts.size - 1}" else "", pad + 8, y + 3, 7f, INK, maxW = W - 2 * pad - 12)
             y += 18f
         }

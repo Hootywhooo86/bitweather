@@ -96,13 +96,14 @@ private fun Kv(items: List<Pair<String, String>>, cols: Int = 2) {
 
 @Composable
 private fun Bars(values: List<Double>, max: Double, modifier: Modifier = Modifier, color: Color = C.cyan) {
+    val grow = rememberReveal(values.size)
     Canvas(modifier.fillMaxWidth()) {
         if (values.isEmpty()) return@Canvas
         val m = if (max > 0) max else (values.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
         val bw = size.width / values.size
         values.forEachIndexed { i, v0 ->
             val v = if (v0.isNaN()) 0.0 else v0
-            val h = max(2f, (v / m * size.height).toFloat().coerceAtMost(size.height))
+            val h = max(2f, (v / m * size.height * grow).toFloat().coerceAtMost(size.height))
             drawRect(if (v <= 0) C.edge else color, Offset(i * bw, size.height - h), Size(bw - 2f, h))
         }
     }
@@ -201,7 +202,9 @@ private fun AlertsCard(b: WeatherBundle, sz: String) {
         list.forEachIndexed { i, x ->
             val col = when (x.type) { "warning" -> C.red; "watch" -> C.orange; "custom" -> C.purple; else -> C.yellow }
             Row(Modifier.fillMaxWidth().background(C.panel2).clickable { AppModel.screen = Screen.Alerts(i) }) {
-                Box(Modifier.width(6.dp).height(if (sz == "T") 30.dp else 44.dp).background(col))
+                // warnings and watches blink like an arcade alarm
+                val blinkOff = animateFx && (x.type == "warning" || x.type == "watch") && AppModel.frame % 8 >= 4
+                Box(Modifier.width(6.dp).height(if (sz == "T") 30.dp else 44.dp).background(if (blinkOff) col.copy(alpha = 0.3f) else col))
                 Column(Modifier.padding(8.dp)) {
                     T(x.title + if (sz != "W" && a.size > 1) "  +${a.size - 1} more" else "", 8.sp, Color.White, lines = 1)
                     if (sz != "T") T(x.name, 7.sp, C.dim, Modifier.padding(top = 4.dp), lines = 2)
@@ -324,7 +327,10 @@ private fun PrecipCard(w: Weather, sz: String) {
 }
 
 @Composable
-private fun Compass(deg: Double, speed: String, unit: String, modifier: Modifier = Modifier) {
+private fun Compass(deg0: Double, speed: String, unit: String, modifier: Modifier = Modifier, gusty: Float = 0.5f) {
+    // the arrow sways with the wind — more when gusts are much stronger than the average
+    val swing = if (animateFx) sin(AppModel.frame * 0.7) * (4 + 10 * gusty) else 0.0
+    val deg = deg0 + swing
     Box(modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val r = min(size.width, size.height) / 2 * 0.86f
@@ -364,7 +370,8 @@ private fun WindCard(w: Weather, sz: String) {
     val c = w.current
     val comp: @Composable (Modifier) -> Unit = { m ->
         Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
-            Compass(c.windDir, Fmt.wNum(c.wind), Fmt.windUnit, Modifier.weight(1f).fillMaxWidth())
+            Compass(c.windDir, Fmt.wNum(c.wind), Fmt.windUnit, Modifier.weight(1f).fillMaxWidth(),
+                gusty = (((c.gust - c.wind) / 25.0).takeUnless { it.isNaN() } ?: 0.2).coerceIn(0.1, 1.0).toFloat())
             Lbl("From ${Fmt.compass(c.windDir)}")
         }
     }
@@ -384,7 +391,10 @@ private fun WindCard(w: Weather, sz: String) {
 private fun SunCard(w: Weather, sz: String) {
     val D = w.daily; val d = w.d0()
     val rise = D.sunrise.getOrNull(d) ?: return; val set = D.sunset.getOrNull(d) ?: return
-    val f = ((w.nowLocal() - naive(rise)).toDouble() / (naive(set) - naive(rise))).toFloat()
+    val fNow = ((w.nowLocal() - naive(rise)).toDouble() / (naive(set) - naive(rise))).toFloat()
+    // the sun creeps along the arc from sunrise to where it is now
+    val creep = rememberReveal(rise, 1200)
+    val f = if (fNow in 0f..1f) fNow * creep else fNow
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
@@ -422,7 +432,7 @@ private fun UvCard(w: Weather, sz: String) {
         Big("${v.roundToInt()}")
         Lbl(Derive.uvInfo(v).first)
         Spacer(Modifier.height(8.dp))
-        SegBar(0, 12, cols, mark = min(11, v.roundToInt()))
+        SegBar(0, 12, cols, mark0 = min(11, v.roundToInt()))
         if (sz == "S") Lbl("Max today ${w.daily.uvMax.at(w.d0()).let { if (it.isNaN()) 0 else it.roundToInt() }}", modifier = Modifier.padding(top = 8.dp))
         else {
             val idx = Derive.dayHours(w, w.d0()).filter { w.hourly.time[it].substring(11, 13).toInt() in 6..20 }
@@ -442,7 +452,7 @@ private fun AqiCard(b: WeatherBundle, sz: String) {
     Column(Modifier.fillMaxSize(), verticalArrangement = if (sz == "S") Arrangement.Center else Arrangement.Top) {
         Big(a.value, a.scale)
         Spacer(Modifier.height(8.dp))
-        SegBar(a.max, a.max, a.colors.map { Color(it) }, mark = a.n - 1)
+        SegBar(a.max, a.max, a.colors.map { Color(it) }, mark0 = a.n - 1)
         Lbl(a.label, modifier = Modifier.padding(top = 8.dp))
         if (sz != "S") {
             val air = b.air!!
@@ -457,7 +467,7 @@ private fun AqiCard(b: WeatherBundle, sz: String) {
 @Composable
 private fun PressureCard(w: Weather, sz: String) {
     val p = w.current.pressure
-    val f = ((p - 960) / 90).coerceIn(0.0, 1.0).toFloat()
+    val f = ((p - 960) / 90).coerceIn(0.0, 1.0).toFloat() * rememberReveal(p, 900)
     val gauge: @Composable (Modifier) -> Unit = { m ->
         Column(m, horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
