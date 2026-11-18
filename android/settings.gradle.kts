@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "Bitweather"
-include(":app")
+include(":core", ":app", ":desktop")

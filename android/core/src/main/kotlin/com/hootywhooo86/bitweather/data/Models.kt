@@ -9,21 +9,21 @@ import java.time.OffsetDateTime
 import java.time.ZoneOffset
 
 // ---------------------------------------------------------------- json helpers
-internal fun JSONObject.d(k: String): Double = if (!has(k) || isNull(k)) Double.NaN else optDouble(k, Double.NaN)
-internal fun JSONObject.dArr(k: String): DoubleArray {
+fun JSONObject.d(k: String): Double = if (!has(k) || isNull(k)) Double.NaN else optDouble(k, Double.NaN)
+fun JSONObject.dArr(k: String): DoubleArray {
     val a = optJSONArray(k) ?: return DoubleArray(0)
     return DoubleArray(a.length()) { if (a.isNull(it)) Double.NaN else a.optDouble(it, Double.NaN) }
 }
-internal fun JSONObject.iArr(k: String): IntArray {
+fun JSONObject.iArr(k: String): IntArray {
     val a = optJSONArray(k) ?: return IntArray(0)
     return IntArray(a.length()) { if (a.isNull(it)) 0 else a.optInt(it, 0) }
 }
-internal fun JSONObject.sArr(k: String): List<String> {
+fun JSONObject.sArr(k: String): List<String> {
     val a = optJSONArray(k) ?: return emptyList()
     return List(a.length()) { a.optString(it) }
 }
-internal fun DoubleArray.at(i: Int): Double = if (i in indices) this[i] else Double.NaN
-internal fun IntArray.at(i: Int): Int = if (i in indices) this[i] else 0
+fun DoubleArray.at(i: Int): Double = if (i in indices) this[i] else Double.NaN
+fun IntArray.at(i: Int): Int = if (i in indices) this[i] else 0
 
 /** Open-Meteo local times ("2026-10-19T16:00") as epoch ms, treating local wall time as UTC. */
 fun naive(s: String): Long = if (s.length == 10) LocalDate.parse(s).atStartOfDay().toEpochSecond(ZoneOffset.UTC) * 1000

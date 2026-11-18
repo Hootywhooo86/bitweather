@@ -24,6 +24,7 @@ import com.hootywhooo86.bitweather.data.WeatherBundle
 import com.hootywhooo86.bitweather.data.Wmo
 import com.hootywhooo86.bitweather.data.at
 import com.hootywhooo86.bitweather.pixel.PixelIcons
+import com.hootywhooo86.bitweather.pixel.SceneArt
 import com.hootywhooo86.bitweather.ui.MainActivity
 import com.hootywhooo86.bitweather.work.UpdateWorker
 import java.text.DateFormat
@@ -84,7 +85,7 @@ object Widgets {
             val bmp = Bitmap.createBitmap(max(1, (wDp * scale).roundToInt()), max(1, (hDp * scale).roundToInt()), Bitmap.Config.ARGB_8888)
             val c = Canvas(bmp)
             c.scale(scale, scale)
-            runCatching { WidgetPainter(ctx, c, wDp.toFloat(), hDp.toFloat(), f).draw(kind, b) }
+            runCatching { WidgetPainter(ctx, c, wDp.toFloat(), hDp.toFloat(), f, scale).draw(kind, b) }
             bmp
         }
         val rv: RemoteViews
@@ -105,7 +106,12 @@ object Widgets {
 }
 
 /** Draws the pixel-style widgets in dp coordinates. */
-class WidgetPainter(private val ctx: Context, private val c: Canvas, private val W: Float, private val H: Float, private val frame: Int = 0) {
+class WidgetPainter(
+    private val ctx: Context, private val c: Canvas, private val W: Float, private val H: Float,
+    private val frame: Int = 0,
+    /** Screen pixels per dp, used to keep pixel art at whole-number scales. */
+    private val pxPerDp: Float = 3f,
+) {
     companion object {
         const val BG = 0xFF1A1A2E.toInt(); const val EDGE = 0xFF3D3D5C.toInt(); const val PANEL2 = 0xFF24243C.toInt()
         const val INK = 0xFFF5F5F5.toInt(); const val DIM = 0xFF9E9E9E.toInt(); const val ORANGE = 0xFFFF9F1C.toInt()
@@ -114,7 +120,7 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         private var font: Typeface? = null
     }
 
-    private val tf: Typeface = font ?: (runCatching { ResourcesCompat.getFont(ctx, R.font.press_start_2p) }.getOrNull() ?: Typeface.MONOSPACE).also { font = it }
+    private val tf: Typeface = font ?: (runCatching { ResourcesCompat.getFont(ctx, R.font.pixelify_sans) }.getOrNull() ?: Typeface.MONOSPACE).also { font = it }
     private val tp = Paint().apply { typeface = tf; isAntiAlias = false }
     private val fp = Paint().apply { isAntiAlias = false }
     private val pad = 10f
@@ -127,28 +133,47 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         lineTo(l + 2 * u, b); lineTo(l + 2 * u, b - u); lineTo(l + u, b - u); lineTo(l + u, b - 2 * u); lineTo(l, b - 2 * u); close()
     }
 
-    private fun panel(sky: IntArray? = null) {
+    /** Text drawn over the landscape gets a hard pixel shadow so it stays readable. */
+    private var onScene = false
+
+    private fun panel(scene: SceneArt.Spec? = null) {
         fp.color = EDGE
-        c.drawPath(stair(0f, 0f, W, H, 4f), fp)
-        val inner = stair(3f, 3f, W - 3f, H - 3f, 3f)
-        if (sky == null) {
+        c.drawPath(stair(0f, 0f, W, H, 2f), fp)
+        val inner = stair(2f, 2f, W - 2f, H - 2f, 2f)
+        if (scene == null) {
             fp.color = BG; c.drawPath(inner, fp)
         } else {
+            // the 128-pixel landscape, each art pixel drawn as exactly k x k screen pixels
+            val wPx = (W - 4f) * pxPerDp; val hPx = (H - 4f) * pxPerDp
+            val k = maxOf(1, Math.round(wPx / 128f))
+            val sw = (wPx / k).toInt() + 1; val sh = (hPx / k).toInt() + 1
+            val bmp = Bitmap.createBitmap(SceneArt.render(sw, sh, scene, frame * 3), sw, sh, Bitmap.Config.ARGB_8888)
             c.save(); c.clipPath(inner)
-            val bh = (H - 6f) / sky.size
-            sky.forEachIndexed { i, col -> fp.color = col; c.drawRect(3f, 3f + i * bh, W - 3f, 3f + (i + 1) * bh + 1f, fp) }
+            c.drawBitmap(bmp, null, RectF(2f, 2f, 2f + sw * k / pxPerDp, 2f + sh * k / pxPerDp), Paint().apply { isFilterBitmap = false })
             c.restore()
+            onScene = true
         }
     }
 
     private fun box(l: Float, t: Float, r: Float, b: Float, color: Int) { fp.color = color; c.drawRect(l, t, r, b, fp) }
 
-    private fun width(s: String, size: Float): Float { tp.textSize = size; return tp.measureText(s) }
+    // Pixelify is narrower than the old 8x8 font, so sizes in the old scale are bumped
+    private fun px(size: Float) = size * 1.45f
+
+    private fun width(s: String, size: Float): Float { tp.textSize = px(size); return tp.measureText(s) }
+
+    private val capCache = HashMap<Float, Float>()
+
+    /** Height of capital letters at this size: puts the text's top edge exactly at [top]. */
+    private fun cap(size: Float): Float = capCache.getOrPut(size) {
+        tp.textSize = px(size); val r = android.graphics.Rect(); tp.getTextBounds("H", 0, 1, r); r.height().toFloat()
+    }
 
     /** Draws text with its top edge at [top]. align: -1 left, 0 centre, 1 right. Returns the text width. */
     private fun text(s: String, x: Float, top: Float, size: Float, color: Int, align: Int = -1, maxW: Float = Float.MAX_VALUE, shadow: Boolean = false): Float {
         var str = s
-        tp.textSize = size
+        val capH = cap(size)
+        tp.textSize = px(size)
         if (tp.measureText(str) > maxW) {
             var base = str
             while (base.length > 1 && tp.measureText(base.trimEnd(' ', '·') + "..") > maxW) base = base.dropLast(1)
@@ -156,8 +181,8 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         }
         val w = tp.measureText(str)
         val sx = when (align) { 0 -> x - w / 2; 1 -> x - w; else -> x }
-        val base = top + size * 0.875f
-        if (shadow) { tp.color = 0x73000000; c.drawText(str, sx + size * 0.12f, base + size * 0.12f, tp) }
+        val base = top + capH
+        if (shadow || onScene) { tp.color = 0xCC0D0D1A.toInt(); c.drawText(str, sx + 1f, base + 1f, tp) }
         tp.color = color
         c.drawText(str, sx, base, tp)
         return w
@@ -166,7 +191,7 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
     /** Big temperature: digits plus a pixel-ring degree sign hugging the last digit. Returns width. */
     private fun bigTemp(temp: Double, x: Float, top: Float, size: Float, align: Int = -1): Float {
         val num = Fmt.t(temp).removeSuffix("°")
-        tp.textSize = size
+        tp.textSize = px(size)
         val bounds = android.graphics.Rect()
         tp.getTextBounds(num, 0, num.length, bounds)
         val u = size / 10f
@@ -233,15 +258,19 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
 
     /** CRT scanlines over the whole widget, like the 128bit landing page. */
     private fun scanlines() {
-        c.save(); c.clipPath(stair(0f, 0f, W, H, 4f))
-        fp.color = 0x1F000000
+        c.save(); c.clipPath(stair(0f, 0f, W, H, 2f))
+        fp.color = 0x0E000000
         var y = 0f
         while (y < H) { c.drawRect(0f, y, W, y + 1.5f, fp); y += 3f }
         c.restore()
     }
 
-    private fun icon(code: Int, day: Boolean, x: Float, y: Float, size: Float) =
-        PixelIcons.draw(c, PixelIcons.grid(Wmo.kind(code), day, frame), x, y, size)
+    /** 32-pixel icon snapped to a whole-number scale (centred in the requested square). */
+    private fun icon(code: Int, day: Boolean, x: Float, y: Float, size: Float) {
+        val k = maxOf(1, Math.round(size * pxPerDp / 32f))
+        val s = k * 32 / pxPerDp
+        PixelIcons.draw(c, PixelIcons.grid(Wmo.kind(code), day, frame), x + (size - s) / 2, y + (size - s) / 2, s)
+    }
 
     private fun skyFor(b: WeatherBundle): IntArray {
         val cur = b.weather.current
@@ -283,11 +312,10 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
 
     private fun now(b: WeatherBundle) {
         val w = b.weather; val cur = w.current; val D = w.daily; val d = w.d0()
-        panel(skyFor(b))
+        panel(SceneArt.specFor(w))
         val alerts = Derive.allAlerts(b)
         var y = pad
         // header: place + time
-        skyFx(b)
         header(b.place.name.uppercase(), b, INK, pin = b.place.gps)
         y += 14f
         if (alerts.isNotEmpty() && H >= 100) {
@@ -324,8 +352,9 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         y += mainH + 10
         // hourly strip if there's room
         if (H - y - pad >= 54) {
-            box(pad, y - 2, W - pad, y - 1, 0x40FFFFFF)
             val stripH = 52f
+            // dark glass behind the strip so it reads over the landscape
+            box(pad - 4, y - 3, W - pad + 4, y + stripH - 2, 0xA60D0D1A.toInt())
             val n = floor((W - 2 * pad) / 44f).toInt().coerceIn(1, 12)
             val cw = (W - 2 * pad) / n
             val hrs = Derive.hoursAhead(w, n)
@@ -340,7 +369,7 @@ class WidgetPainter(private val ctx: Context, private val c: Canvas, private val
         }
         // daily rows if there's still room
         if (H - y - pad >= 40) {
-            box(pad, y - 2, W - pad, y - 1, 0x40FFFFFF)
+            box(pad - 4, y - 1, W - pad + 4, H - pad + 3, 0xA60D0D1A.toInt())
             dailyRows(w, pad, y + 2, W - pad, H - pad, 20f)
         }
     }

@@ -29,7 +29,7 @@ object Wmo {
 
 // ---------------------------------------------------------------- formatting (reads the live unit settings)
 object Fmt {
-    private val u get() = Prefs.units
+    private val u get() = Config.units
     private fun ok(v: Double) = !v.isNaN()
 
     fun t(c: Double): String = if (!ok(c)) "--°" else "${(if (u.temp == "F") c * 9 / 5 + 32 else c).roundToInt()}°"
@@ -85,7 +85,7 @@ object Derive {
     }
 
     fun customAlerts(w: Weather): List<Alert> {
-        val T = Prefs.thresholds; val H = w.hourly
+        val T = Config.thresholds; val H = w.hourly
         val hrs = hoursAhead(w, 48)
         if (hrs.isEmpty()) return emptyList()
         val out = ArrayList<Alert>()
@@ -179,7 +179,7 @@ object Derive {
     private val AQHI_COL = listOf(0xFF00CCFF, 0xFF0099CC, 0xFF006699, 0xFFFFFF00, 0xFFFFCC00, 0xFFFF9933, 0xFFFF6666, 0xFFFF0000, 0xFFCC0000, 0xFF990000, 0xFF660000)
 
     fun aqInfo(air: Air?): AqInfo? {
-        if (Prefs.aqScale == "aqhi") {
+        if (Config.aqScale == "aqhi") {
             val v = aqhi(air) ?: return null
             val risk = when { v <= 3 -> "Low"; v <= 6 -> "Moderate"; v <= 10 -> "High"; else -> "Very high" }
             return AqInfo(if (v > 10) "10+" else "$v", minOf(v, 11), 11, AQHI_COL, "$risk health risk", "AQHI")

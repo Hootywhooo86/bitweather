@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
         if (Prefs.firstRun) askFirstRun()
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                // every time the app is opened: sync location, then refresh every 30 min while it stays open
+                // every time the app is opened: sync location, then refresh every 10 min while it stays open
                 refresh(force = false, relocate = true)
                 while (isActive) {
                     delay(Repo.UPDATE_MS)
@@ -185,7 +185,7 @@ fun Root(act: MainActivity) {
             LaunchedEffect(msg) { delay(3200); AppModel.toast = null }
             Box(
                 Modifier.align(Alignment.BottomCenter).padding(24.dp).widthIn(max = 420.dp)
-                    .background(C.panel).border(3.dp, C.orange, pixelShape(2.dp)).padding(12.dp),
+                    .background(C.panel).border(2.dp, C.orange, pixelShape(2.dp)).padding(12.dp),
             ) { T(msg, 8.sp, C.orange, lh = 14.sp) }
         }
     }

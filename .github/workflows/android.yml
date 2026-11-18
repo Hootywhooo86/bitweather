@@ -1,4 +1,4 @@
-name: Android APK
+name: Android APK + Windows app
 
 on:
   push:
@@ -41,5 +41,40 @@ jobs:
           make_latest: "true"
           files: android/Bitweather-1.0.${{ github.run_number }}.apk
           body: |
-            Download **Bitweather-1.0.${{ github.run_number }}.apk** below on your Android phone and open it to install or update.
+            **Android:** download **Bitweather-1.0.${{ github.run_number }}.apk** on your phone and open it to install or update.
+            **Windows:** download **Bitweather-Windows-1.0.${{ github.run_number }}.msi** (added a few minutes after the APK) and run it. It installs over the previous version.
             Built from `${{ github.ref_name }}` @ ${{ github.sha }}.
+
+  windows:
+    # Windows installer (MSI + EXE) for the desktop app with pixel desktop widgets; attached to the same release
+    needs: build
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: android
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build Windows installers
+        run: ./gradlew :desktop:packageMsi :desktop:packageExe -PbuildNumber=${{ github.run_number }} --no-daemon
+
+      - name: Rename installers
+        run: |
+          cp desktop/build/compose/binaries/main/msi/*.msi Bitweather-Windows-1.0.${{ github.run_number }}.msi
+          cp desktop/build/compose/binaries/main/exe/*.exe Bitweather-Windows-1.0.${{ github.run_number }}.exe
+
+      - name: Attach to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          files: |
+            android/Bitweather-Windows-1.0.${{ github.run_number }}.msi
+            android/Bitweather-Windows-1.0.${{ github.run_number }}.exe

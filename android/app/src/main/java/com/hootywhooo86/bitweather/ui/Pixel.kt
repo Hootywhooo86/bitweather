@@ -50,8 +50,9 @@ class PixelShape(private val step: Dp, private val steps: Int) : Shape {
 
 /** Pixel staircase roughly matching a corner radius. */
 fun pixelShape(radius: Dp): Shape {
-    val steps = (radius.value / 4f).toInt().coerceIn(1, 4)
-    return PixelShape(radius / steps, steps)
+    // small 2dp steps: smooth-looking rounded corners that are still made of pixels
+    val steps = (radius.value / 2.5f).toInt().coerceIn(1, 6)
+    return PixelShape(radius / steps / 1.6f, steps)
 }
 
 @Composable
@@ -70,15 +71,15 @@ fun Glyph(name: String, size: Dp, color: Color, modifier: Modifier = Modifier) {
 @Composable
 fun BigTemp(text: String, size: androidx.compose.ui.unit.TextUnit, color: Color = Color.White, modifier: Modifier = Modifier) {
     androidx.compose.foundation.layout.Row(modifier) {
-        T(text.removeSuffix("°"), size, color)
-        Glyph("degree", (size.value * 0.28f).dp, color, Modifier.padding(start = (size.value * 0.06f).dp))
+        T(text.removeSuffix("°"), size, color, shadow = true)
+        Glyph("degree", (size.value * 0.3f).dp, color, Modifier.padding(start = (size.value * 0.08f).dp, top = (size.value * 0.25f).dp))
     }
 }
 
 /** CRT scanlines like the 128bit landing page. */
-fun Modifier.scanlines(alpha: Float = 0.14f) = drawWithContent {
+fun Modifier.scanlines(alpha: Float = 0.05f) = drawWithContent {
     drawContent()
-    val line = 2.dp.toPx(); val gap = 4.dp.toPx()
+    val line = 1.dp.toPx(); val gap = 3.dp.toPx()
     var y = 0f
     while (y < size.height) { drawRect(Color.Black.copy(alpha = alpha), Offset(0f, y), Size(size.width, line)); y += gap }
 }
@@ -90,55 +91,6 @@ private fun rnd(i: Int, salt: Int): Float {
 
 /** Off in screenshot tests so the endless animation doesn't stall rendering. */
 var animateFx = true
-
-/** Animated pixel weather behind the hero: snow, rain, stars, drifting clouds, lightning. */
-@Composable
-fun PixelWeatherFx(kind: String, day: Boolean, modifier: Modifier = Modifier) {
-    val t = if (animateFx) {
-        val tr = rememberInfiniteTransition(label = "fx")
-        tr.animateFloat(0f, 1f, infiniteRepeatable(tween(12_000, easing = LinearEasing)), label = "t").value
-    } else 0.37f
-    val cloud = remember {
-        listOf("..##......", ".####.##..", "##########", ".########.")
-    }
-    Canvas(modifier) {
-        val u = 3.dp.toPx()
-        fun q(v: Float) = floor(v / u) * u
-        val w = size.width; val h = size.height
-        val wet = kind in setOf("rain", "drizzle", "showers", "thunder", "freezing")
-        when {
-            kind == "snow" -> for (i in 0 until 46) {
-                val y = ((rnd(i, 1) + t * (1.5f + rnd(i, 2))) % 1f) * h
-                val x = rnd(i, 3) * w + sin((t * 6 + rnd(i, 4)) * 2 * PI).toFloat() * u * 2
-                val s = if (i % 5 == 0) 2 * u else u
-                drawRect(Color.White.copy(alpha = 0.75f), Offset(q(x), q(y)), Size(s, s))
-            }
-            wet -> for (i in 0 until (if (kind == "drizzle") 34 else 60)) {
-                val y = ((rnd(i, 1) + t * (6f + 3 * rnd(i, 2))) % 1f) * h
-                val x = rnd(i, 3) * w - y * 0.15f
-                drawRect(Color(0xFF4FC3F7).copy(alpha = 0.55f), Offset(q(x), q(y)), Size(u, u * 3))
-            }
-        }
-        if (!day && !wet && kind != "snow") for (i in 0 until 34) {
-            val tw = sin((t * 8 + rnd(i, 5)) * 2 * PI)
-            if (tw > -0.3) drawRect(Color.White.copy(alpha = if (tw > 0.6) 0.9f else 0.45f),
-                Offset(q(rnd(i, 6) * w), q(rnd(i, 7) * h * 0.6f)), Size(u, u))
-        }
-        if (kind in setOf("partly", "mostly", "cloudy", "fog") || (kind == "clear" && day)) {
-            val count = when (kind) { "cloudy", "fog" -> 4; "clear" -> 1; else -> 2 }
-            for (c in 0 until count) {
-                val speed = 0.5f + rnd(c, 8) * 0.5f
-                val x0 = ((rnd(c, 9) + t * speed) % 1.3f - 0.2f) * w
-                val y0 = q(h * (0.08f + 0.5f * rnd(c, 10)))
-                val s = u * (if (c % 2 == 0) 2 else 1)
-                cloud.forEachIndexed { ry, row -> row.forEachIndexed { rx, ch ->
-                    if (ch == '#') drawRect(Color.White.copy(alpha = if (kind == "fog") 0.18f else 0.12f), Offset(q(x0) + rx * s, y0 + ry * s), Size(s, s))
-                } }
-            }
-        }
-        if (kind == "thunder" && (t * 9) % 1f < 0.035f) drawRect(Color.White.copy(alpha = 0.28f))
-    }
-}
 
 // ---------------------------------------------------------------- animation helpers
 

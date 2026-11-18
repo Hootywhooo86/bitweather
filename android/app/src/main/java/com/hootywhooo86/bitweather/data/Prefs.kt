@@ -5,16 +5,6 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Units(
-    var temp: String = "C", var wind: String = "kmh", var precip: String = "mm",
-    var pressure: String = "hPa", var dist: String = "km", var clock: String = "24",
-)
-
-/** Custom alert thresholds in metric (°C, km/h, cm). null = off. */
-data class Thresholds(var cold: Double? = -20.0, var hot: Double? = 30.0, var gust: Double? = 70.0, var snow: Double? = 10.0)
-
-data class Slot(val id: String, var size: String, var hidden: Boolean = false)
-
 object Prefs {
     private lateinit var sp: SharedPreferences
 
@@ -22,9 +12,11 @@ object Prefs {
 
     var places: MutableList<Place> = mutableListOf(DEFAULT_PLACE)
     var activeId: String = DEFAULT_PLACE.id
-    val units = Units()
-    var aqScale = "aqhi"
-    val thresholds = Thresholds()
+    val units get() = Config.units
+    var aqScale: String
+        get() = Config.aqScale
+        set(v) { Config.aqScale = v }
+    val thresholds get() = Config.thresholds
     var followGps = true
     var notifyAlerts = true
     var notifyConditions = true

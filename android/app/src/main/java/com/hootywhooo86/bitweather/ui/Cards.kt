@@ -268,7 +268,7 @@ private fun DailyCard(w: Weather, sz: String) {
         LazyRow(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             items(ds) { k ->
                 Column(
-                    Modifier.width(56.dp).fillMaxHeight().background(C.panel2, pixelShape(28.dp)).border(3.dp, C.edge, pixelShape(28.dp))
+                    Modifier.width(56.dp).fillMaxHeight().background(C.panel2, pixelShape(28.dp)).border(2.dp, C.edge, pixelShape(28.dp))
                         .clickable { AppModel.screen = Screen.Day(k) }.padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceBetween,
                 ) {

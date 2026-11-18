@@ -28,9 +28,18 @@ Bitweather is Daniel's 128bit-family take on weather: current conditions, hourly
 2. Which weather data provider? (Open-Meteo is free with no API key — strong default; Environment Canada for Canadian accuracy.)
 3. Any signature features — pixel radar, quest-linked weather, railroad-specific conditions (Daniel's a railroader — wind/temp at terminals?)?
 
+## Windows app (`android/desktop/`)
+
+Download **Bitweather-Windows-1.0.N.msi** from [Releases](https://github.com/Hootywhooo86/bitweather/releases/latest) and run it.
+
+- **Desktop widgets:** Now (with the pixel landscape), Hourly, 10-day and Details. Drag them anywhere and right-click for size (S/M/L), keep on top, or remove. Add them from the tray icon or Settings.
+- **Tray app:** closing the window keeps Bitweather running in the tray so widgets stay current. Quit from the tray. There's an optional **Start with Windows** setting.
+- **Location and refresh:** uses Windows Location (or an approximate IP location) and refreshes every 10 minutes. It sends Windows notifications for alerts and a forecast every 6 hours, and checks GitHub for updates.
+- **Shared code:** the weather logic and pixel art are shared with Android (`android/core/`).
+
 ## Android app (`android/`) — the real app
 
-Native Kotlin app (Jetpack Compose) with **real home-screen widgets**. Install the APK from **[Releases](https://github.com/Hootywhooo86/bitweather/releases/latest)**. Every push that changes `android/` builds a new signed APK there.
+Native Kotlin app (Jetpack Compose) with **real home-screen widgets**, drawn as detailed 128-pixel art: a landscape scene, 32×32 shaded icons and the Pixelify Sans font. The art comes from `android/core/` and is shared with the Windows app. Install the APK from **[Releases](https://github.com/Hootywhooo86/bitweather/releases/latest)**. Every push that changes `android/` builds a new signed APK there.
 
 - **Home-screen widgets** (long-press home screen → Widgets → Bitweather), all resizable. Each one redraws pixel-perfect for its size:
   - **Now:** temperature, conditions and alerts. Make it bigger to add an hourly strip, then the 10-day forecast.

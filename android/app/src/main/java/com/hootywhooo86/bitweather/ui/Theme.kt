@@ -41,16 +41,27 @@ object C {
     val cyan = Color(0xFF4FC3F7); val green = Color(0xFF69F0AE); val red = Color(0xFFFF5252); val yellow = Color(0xFFFFEB3B)
 }
 
-val Pixel = FontFamily(Font(R.font.press_start_2p))
+/** Pixelify Sans: a finer, detailed pixel font (the old 8x8 Press Start was too chunky). */
+val Pixel = FontFamily(Font(R.font.pixelify_sans), Font(R.font.pixelify_sans_bold, androidx.compose.ui.text.font.FontWeight.Bold))
+
+/** Pixelify is narrower than the old font: sizes given in the old scale are bumped so text stays readable. */
+private const val PIXEL_SCALE = 1.45f
 
 @Composable
 fun T(
     s: String, size: TextUnit = 9.sp, color: Color = C.ink, modifier: Modifier = Modifier,
     align: TextAlign? = null, lines: Int = Int.MAX_VALUE, lh: TextUnit = TextUnit.Unspecified, family: FontFamily = Pixel,
+    shadow: Boolean = false,
 ) {
+    val k = if (family == Pixel) PIXEL_SCALE else 1f
     BasicText(
         s, modifier,
-        style = TextStyle(fontFamily = family, fontSize = size, color = color, textAlign = align ?: TextAlign.Start, lineHeight = lh),
+        style = TextStyle(
+            fontFamily = family, fontSize = size * k, color = color, textAlign = align ?: TextAlign.Start,
+            lineHeight = if (lh == TextUnit.Unspecified) lh else lh * k,
+            // hard 1-pixel drop shadow, pixel-art style (no blur)
+            shadow = if (shadow) androidx.compose.ui.graphics.Shadow(Color(0xCC0D0D1A), androidx.compose.ui.geometry.Offset(3f, 3f), 0f) else null,
+        ),
         maxLines = lines, overflow = TextOverflow.Ellipsis,
     )
 }
@@ -64,13 +75,21 @@ fun Sym(s: String, size: TextUnit = 14.sp, color: Color = C.ink, modifier: Modif
 fun PixelIcon(code: Int, day: Boolean, size: Dp, modifier: Modifier = Modifier) {
     val f = (AppModel.frame / 2) % PixelIcons.FRAMES
     val bmp = remember(code, day, f) { PixelIcons.raw(PixelIcons.grid(Wmo.kind(code), day, f)).asImageBitmap() }
-    Image(bmp, null, modifier.size(size), filterQuality = FilterQuality.None)
+    Image(bmp, null, modifier.size(crisp(size, 32)), filterQuality = FilterQuality.None)
+}
+
+/** Snap a display size so an n-pixel sprite scales by a whole number (every art pixel the same size on screen). */
+@Composable
+fun crisp(size: Dp, n: Int): Dp {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    val k = kotlin.math.max(1, kotlin.math.round(with(d) { size.toPx() } / n).toInt())
+    return with(d) { (k * n).toDp() }
 }
 
 @Composable
 fun GridIcon(grid: IntArray, size: Dp, modifier: Modifier = Modifier) {
     val bmp = remember(grid) { PixelIcons.raw(grid).asImageBitmap() }
-    Image(bmp, null, modifier.size(size), filterQuality = FilterQuality.None)
+    Image(bmp, null, modifier.size(crisp(size, 32)), filterQuality = FilterQuality.None)
 }
 
 @Composable
@@ -86,14 +105,14 @@ fun PxButton(
             .alpha(if (enabled) 1f else 0.4f)
             .defaultMinSize(minWidth = 38.dp, minHeight = 38.dp)
             .background(Color.Black, shape)
-            .padding(bottom = 3.dp)
+            .padding(bottom = 2.dp)
             .background(bgc, shape)
-            .border(3.dp, if (on || primary) C.purple else C.edge, shape)
+            .border(2.dp, if (on || primary) C.purple else C.edge, shape)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        if (symbol) Glyph(label, 16.dp, fg) else T(label, 8.sp, fg)
+        if (symbol) Glyph(label, 14.dp, fg) else T(label, 8.sp, fg)
     }
 }
 

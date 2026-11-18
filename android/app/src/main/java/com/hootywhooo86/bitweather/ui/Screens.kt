@@ -71,7 +71,7 @@ private fun Sheet(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun Field(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, number: Boolean = false) {
     BasicTextField(
-        value, onChange, modifier.background(C.panel, pixelShape(8.dp)).border(3.dp, C.edge, pixelShape(8.dp)).padding(12.dp),
+        value, onChange, modifier.background(C.panel, pixelShape(8.dp)).border(2.dp, C.edge, pixelShape(8.dp)).padding(12.dp),
         textStyle = TextStyle(fontFamily = Pixel, fontSize = 10.sp, color = Color.White),
         cursorBrush = SolidColor(C.purple), singleLine = true,
         keyboardOptions = if (number) KeyboardOptions(keyboardType = KeyboardType.Text) else KeyboardOptions.Default,
@@ -105,7 +105,7 @@ fun PlacesScreen(act: MainActivity) {
         Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!searching && q.trim().length >= 2 && results.isEmpty()) T("No places found.", 8.sp, C.dim)
             results.forEach { r ->
-                Row(Modifier.fillMaxWidth().background(C.panel, pixelShape(12.dp)).border(3.dp, C.edge, pixelShape(12.dp))
+                Row(Modifier.fillMaxWidth().background(C.panel, pixelShape(12.dp)).border(2.dp, C.edge, pixelShape(12.dp))
                     .clickable {
                         var p = Prefs.places.firstOrNull { !it.gps && Math.abs(it.lat - r.lat) < 0.01 && Math.abs(it.lon - r.lon) < 0.01 }
                         if (p == null) { p = r.copy(id = "p" + System.currentTimeMillis().toString(36)); Prefs.places.add(p) }
@@ -133,7 +133,7 @@ fun PlacesScreen(act: MainActivity) {
                 val cb = Repo.cached(ctx, p.id)
                 val on = p.id == Prefs.activeId
                 Row(
-                    Modifier.fillMaxWidth().background(C.panel, pixelShape(12.dp)).border(3.dp, if (on) C.purple else C.edge, pixelShape(12.dp)).padding(10.dp),
+                    Modifier.fillMaxWidth().background(C.panel, pixelShape(12.dp)).border(2.dp, if (on) C.purple else C.edge, pixelShape(12.dp)).padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (cb != null) PixelIcon(cb.weather.current.code, cb.weather.current.isDay, 36.dp) else Spacer(Modifier.width(36.dp))
@@ -276,7 +276,7 @@ fun DayScreen(k: Int) {
         }
         Spacer(Modifier.height(16.dp))
         val idx = Derive.dayHours(w, k)
-        Box(Modifier.fillMaxWidth().height(160.dp).background(C.panel, pixelShape(16.dp)).border(4.dp, C.edge, pixelShape(16.dp)).padding(12.dp)) {
+        Box(Modifier.fillMaxWidth().height(160.dp).background(C.panel, pixelShape(16.dp)).border(2.dp, C.edge, pixelShape(16.dp)).padding(12.dp)) {
             TempChart(w, idx, Modifier.fillMaxSize())
         }
         Spacer(Modifier.height(12.dp))
